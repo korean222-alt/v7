@@ -55,21 +55,9 @@ const getQuotaLeft = async (type) => {
 let aiCardsCache = { fp:"", cards:null };
 
 // ── SEED DATA ─────────────────────────────────────────────────────────────────
-const SEED_CUSTOMERS = [
-  {id:"c1",name:"김민정",phone:"010-1234-5678",address:"강남구 역삼동 101호",notes:"강아지 있음",createdAt:"2025-01-10"},
-  {id:"c2",name:"박재현",phone:"010-9876-5432",address:"마포구 상암동 205호",notes:"",createdAt:"2025-02-20"},
-  {id:"c3",name:"이수연",phone:"010-5555-1234",address:"송파구 잠실동 308호",notes:"오전 선호",createdAt:"2025-03-05"},
-];
-const SEED_QUOTES = [
-  {id:"q1",customerId:"c1",customerName:"김민정",items:[{id:"i1",label:"기본 청소 30평",price:220000},{id:"i2",label:"냉장고 내부",price:30000}],total:250000,status:"계약완료",payStatus:"입금완료",date:"2025-02-15",createdAt:"2025-02-14"},
-  {id:"q2",customerId:"c2",customerName:"박재현",items:[{id:"i3",label:"기본 청소 25평",price:190000},{id:"i4",label:"에어컨 필터",price:20000}],total:210000,status:"계약완료",payStatus:"미수금",date:"2025-03-10",createdAt:"2025-03-09"},
-  {id:"q3",customerId:"c3",customerName:"이수연",items:[{id:"i5",label:"기본 청소 20평",price:160000},{id:"i6",label:"욕실 곰팡이",price:25000}],total:185000,status:"검토중",payStatus:"미청구",date:"2025-04-20",createdAt:"2025-04-19"},
-  {id:"q4",customerId:"c1",customerName:"김민정",items:[{id:"i7",label:"기본 청소 30평",price:220000}],total:220000,status:"계약완료",payStatus:"입금완료",date:"2025-03-20",createdAt:"2025-03-19"},
-];
-const SEED_SCHEDULES = [
-  {id:"s1",customerId:"c1",customerName:"김민정",date:"2025-05-08",time:"10:00",address:"강남구 역삼동 101호",status:"예정",notes:"주차 가능"},
-  {id:"s2",customerId:"c3",customerName:"이수연",date:"2025-05-15",time:"13:00",address:"송파구 잠실동 308호",status:"예정",notes:""},
-];
+const SEED_CUSTOMERS = [];
+const SEED_QUOTES = [];
+const SEED_SCHEDULES = [];
 const DEFAULT_MATERIALS = [
   {id:"m1",label:"기본 청소 (10평)",price:100000,category:"기본"},
   {id:"m2",label:"기본 청소 (20평)",price:160000,category:"기본"},
@@ -83,10 +71,7 @@ const DEFAULT_MATERIALS = [
   {id:"m10",label:"붙박이장 내부",price:20000,category:"추가"},
 ];
 const DEFAULT_PROFILE  = {bizName:"우리 청소",ownerName:"",phone:"",intro:"깔끔하고 꼼꼼한 이사청소 전문 업체입니다."};
-const DEFAULT_WORKERS  = [
-  {id:"w1",name:"김철수",phone:"010-1111-2222",specialty:"입주청소",isActive:true},
-  {id:"w2",name:"박영희",phone:"010-3333-4444",specialty:"이사짐정리",isActive:true},
-];
+const DEFAULT_WORKERS  = [];
 const DEFAULT_INVENTORY = [
   {id:"inv1",label:"다목적 세제",unit:"개",stock:5,minStock:2,perJob:0.5},
   {id:"inv2",label:"욕실 곰팡이 제거제",unit:"개",stock:3,minStock:1,perJob:0.3},
