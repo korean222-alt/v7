@@ -336,7 +336,7 @@ function ActionCards({customers,quotes,schedules,workers,inventory,setTab}){
       const raw=data.content?.[0]?.text||"[]";
       const match=raw.match(/\[[\s\S]*\]/);
       const cards=JSON.parse(match?match[0]:"[]");
-      const withIds=cards.map((c,i)=>({...c,id:`ai-${i}-${fp.slice(0,6)}`}));
+      const withIds=cards.map((c,i)=>({...c,id:`ai-${i}-${Date.now()}`}));
       aiCardsCache={fp,cards:withIds};
       setAiCards(withIds);
     }catch{aiCardsCache={fp,cards:[]};setAiCards([]);}
@@ -1400,6 +1400,7 @@ function ProfileSection({profile,upP,onBack}){
 function WorkersSection({workers,upW,onBack}){
   const [form,setForm]=useState({name:"",phone:"",specialty:"입주청소"});
   const specialties=["입주청소","이사짐정리","특수청소","전체"];
+const [customSpecialty,setCustomSpecialty]=useState("");
   return(
     <div>
       <PH title="직원 관리" sub="팀원 현황 및 작업 배정" onBack={onBack}/>
@@ -1422,6 +1423,10 @@ function WorkersSection({workers,upW,onBack}){
           <input value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="이름 *" style={{...IS,marginBottom:8}}/>
           <input value={form.phone} onChange={e=>setForm(p=>({...p,phone:e.target.value}))} placeholder="연락처" style={{...IS,marginBottom:10}}/>
           <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>{specialties.map(s=><button key={s} onClick={()=>setForm(p=>({...p,specialty:s}))} style={{padding:"7px 14px",background:form.specialty===s?"#111":"transparent",color:form.specialty===s?"#fff":"#888",border:`1.5px solid ${form.specialty===s?"#111":"#EEEEE9"}`,borderRadius:99,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{s}</button>)}</div>
+          <div style={{display:"flex",gap:8,marginBottom:14}}>
+  <input value={customSpecialty} onChange={e=>setCustomSpecialty(e.target.value)} placeholder="직접 입력" style={{...IS,flex:1,marginBottom:0}}/>
+  <button onClick={()=>{if(!customSpecialty.trim())return;setForm(p=>({...p,specialty:customSpecialty.trim()}));setCustomSpecialty("");}} style={{padding:"0 14px",background:"#111",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:13}}>선택</button>
+</div>
           <BigBtn onClick={()=>{if(!form.name)return;upW([...workers,{id:uid(),...form,isActive:true}]);setForm({name:"",phone:"",specialty:"입주청소"});}}>직원 추가</BigBtn>
         </div>
       </div>
