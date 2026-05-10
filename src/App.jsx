@@ -70,8 +70,36 @@ const DEFAULT_MATERIALS = [
   {id:"m9",label:"오븐/가스레인지",price:35000,category:"추가"},
   {id:"m10",label:"붙박이장 내부",price:20000,category:"추가"},
 ];
-const DEFAULT_PROFILE  = {bizName:"우리 청소",ownerName:"",phone:"",intro:"깔끔하고 꼼꼼한 이사청소 전문 업체입니다."};
+const INTERIOR_MATERIALS = [
+  {id:"im1",label:"철거 (10평)",price:1500000,category:"기본"},
+  {id:"im2",label:"철거 (20평)",price:2500000,category:"기본"},
+  {id:"im3",label:"철거 (30평)",price:3500000,category:"기본"},
+  {id:"im4",label:"목공 (10평)",price:2000000,category:"기본"},
+  {id:"im5",label:"목공 (20평)",price:3200000,category:"기본"},
+  {id:"im6",label:"목공 (30평)",price:4500000,category:"기본"},
+  {id:"im7",label:"도배-합지 (10평)",price:500000,category:"기본"},
+  {id:"im8",label:"도배-실크 (10평)",price:800000,category:"기본"},
+  {id:"im9",label:"장판 (10평)",price:600000,category:"기본"},
+  {id:"im10",label:"강마루 (10평)",price:1200000,category:"기본"},
+  {id:"im11",label:"욕실 리모델링 (1개소)",price:3500000,category:"추가"},
+  {id:"im12",label:"주방 싱크대 교체",price:2500000,category:"추가"},
+  {id:"im13",label:"타일 시공",price:1500000,category:"추가"},
+  {id:"im14",label:"조명 교체",price:1500000,category:"추가"},
+  {id:"im15",label:"전기 공사",price:1000000,category:"추가"},
+  {id:"im16",label:"도장/페인트",price:800000,category:"추가"},
+  {id:"im17",label:"붙박이장 설치",price:1500000,category:"추가"},
+  {id:"im18",label:"창호/샷시 교체",price:5000000,category:"추가"},
+  {id:"im19",label:"폐기물 처리",price:500000,category:"추가"},
+  {id:"im20",label:"현관 타일",price:300000,category:"추가"},
+];
+const DEFAULT_PROFILE  = {bizName:"우리 업체",ownerName:"",phone:"",intro:"",industry:"청소"};
 const DEFAULT_WORKERS  = [];
+const DEFAULT_COSTS = {
+  laborPerDay: 250000,
+  materialRate: 30,
+  fixedMonthly: 500000,
+  taxRate: 10,
+};
 const DEFAULT_INVENTORY = [
   {id:"inv1",label:"다목적 세제",unit:"개",stock:5,minStock:2,perJob:0.5},
   {id:"inv2",label:"욕실 곰팡이 제거제",unit:"개",stock:3,minStock:1,perJob:0.3},
@@ -103,6 +131,7 @@ function OnboardingModal({profile,upP,customers,upC,onClose}){
   const [step,setStep]=useState(1);
   const [bizName,setBizName]=useState(profile.bizName||"");
   const [phone,setPhone]=useState(profile.phone||"");
+  const [industry,setIndustry]=useState(profile.industry||"청소");
   const [custName,setCustName]=useState("");
   const [custPhone,setCustPhone]=useState("");
 
@@ -114,7 +143,7 @@ function OnboardingModal({profile,upP,customers,upC,onClose}){
 
   const saveProfile=()=>{
     if(!bizName.trim()) return;
-    upP({...profile,bizName,phone});
+    upP({...profile,bizName,phone,industry});
     setStep(2);
   };
 
@@ -140,10 +169,18 @@ function OnboardingModal({profile,upP,customers,upC,onClose}){
           <div>
             <div style={{fontSize:22,fontWeight:900,color:"#111",marginBottom:6}}>안녕하세요! 👋</div>
             <div style={{fontSize:14,color:"#555",lineHeight:1.7,marginBottom:20}}>
-              WORKOS는 이사청소 업체 운영을 도와주는 스마트 운영 도구예요.<br/><br/>
-              견적서 자동생성, 고객 관리, 일정 조율, AI 분석까지 — 한 곳에서 다 됩니다.<br/><br/>
+              사장님의 시간을 아껴드립니다.<br/><br/>
+              카톡으로 견적 보내는 데 얼마나 걸리세요? WORKOS로 1분 안에 끝냅니다. 고객·일정·미수금까지 한 곳에서 관리하세요.<br/><br/>
               먼저 업체 정보를 입력해볼게요 😊
             </div>
+            <div style={{fontSize:12,fontWeight:700,color:"#666",marginBottom:6}}>업종 선택 *</div>
+<div style={{display:"flex",gap:8,marginBottom:16}}>
+  {["청소","인테리어"].map(ind=>(
+    <button key={ind} onClick={()=>setIndustry(ind)} style={{flex:1,padding:"12px",background:industry===ind?"#111":"transparent",color:industry===ind?"#fff":"#888",border:`1.5px solid ${industry===ind?"#111":"#EEEEE9"}`,borderRadius:12,fontSize:14,fontWeight:industry===ind?700:400,cursor:"pointer",fontFamily:"inherit"}}>
+      {ind==="청소"?"🧹 청소업":"🔨 인테리어"}
+    </button>
+  ))}
+</div>
             <div style={{fontSize:12,fontWeight:700,color:"#666",marginBottom:6}}>업체명 *</div>
             <input value={bizName} onChange={e=>setBizName(e.target.value)} placeholder="예: 깔끔이사청소" style={{width:"100%",border:"1.5px solid #EEEEE9",borderRadius:12,padding:"12px 14px",fontSize:14,fontFamily:"inherit",outline:"none",background:"#FAFAF7",boxSizing:"border-box",marginBottom:10,color:"#111"}}/>
             <div style={{fontSize:12,fontWeight:700,color:"#666",marginBottom:6}}>업체 연락처</div>
@@ -157,7 +194,7 @@ function OnboardingModal({profile,upP,customers,upC,onClose}){
           <div>
             <div style={{fontSize:22,fontWeight:900,color:"#111",marginBottom:6}}>첫 고객을 등록해요 📋</div>
             <div style={{fontSize:14,color:"#555",lineHeight:1.7,marginBottom:20}}>
-              고객 정보를 저장해두면 나중에 재계약할 때 바로 꺼내쓸 수 있어요.<br/><br/>
+              고객 정보 기억하느라 머리 쓰지 마세요. 한 번 저장하면 재계약·일정·미수금 관리가 자동으로 연결됩니다.<br/><br/>
               카카오 대화를 붙여넣으면 AI가 자동으로 정보를 추출해주는 기능도 있답니다 ✨
             </div>
             <div style={{fontSize:12,fontWeight:700,color:"#666",marginBottom:6}}>고객명 *</div>
@@ -172,7 +209,7 @@ function OnboardingModal({profile,upP,customers,upC,onClose}){
         {step===3&&(
           <div>
             <div style={{fontSize:22,fontWeight:900,color:"#111",marginBottom:6}}>이런 기능들이 있어요 🤖</div>
-            <div style={{fontSize:13,color:"#555",lineHeight:1.7,marginBottom:16}}>WORKOS의 핵심 AI 기능을 소개할게요!</div>
+            <div style={{fontSize:13,color:"#555",lineHeight:1.7,marginBottom:16}}>사장님 시간을 아껴주는 기능들이에요 ⏱️</div>
             {[
               {icon:"✨",title:"카카오 대화 자동 추출",desc:"고객 카톡 내용 붙여넣으면 AI가 이름·주소·날짜 자동 추출"},
               {icon:"📸",title:"사진 분석 견적",desc:"하자 사진 찍으면 AI가 추가 청소 항목과 금액 자동 제안"},
@@ -204,17 +241,21 @@ export default function App() {
   const [messages,setMessages]   = useState(DEFAULT_MESSAGES);
   const [loaded,setLoaded]       = useState(false);
   const [showOnboarding,setShowOnboarding] = useState(false);
+  const [costs,setCosts] = useState(DEFAULT_COSTS);
 
   useEffect(()=>{
     (async()=>{
       setCustomers(await store.get("w4-customers")||SEED_CUSTOMERS);
       setQuotes(await store.get("w4-quotes")||SEED_QUOTES);
       setSchedules(await store.get("w4-schedules")||SEED_SCHEDULES);
-      setMaterials(await store.get("w4-materials")||DEFAULT_MATERIALS);
-      setProfile(await store.get("w4-profile")||DEFAULT_PROFILE);
+      const savedProfile = await store.get("w4-profile")||DEFAULT_PROFILE;
+      const defaultMats = savedProfile.industry==="인테리어" ? INTERIOR_MATERIALS : DEFAULT_MATERIALS;
+      setMaterials(await store.get("w4-materials")||defaultMats);
+      setProfile(savedProfile);
       setWorkers(await store.get("w4-workers")||DEFAULT_WORKERS);
       setInventory(await store.get("w4-inventory")||DEFAULT_INVENTORY);
       setMessages(await store.get("w4-messages")||DEFAULT_MESSAGES);
+      setCosts(await store.get("w4-costs")||DEFAULT_COSTS);
       const done = await store.get("w4-onboarding-done");
       if(!done) setShowOnboarding(true);
       setLoaded(true);
@@ -230,6 +271,7 @@ export default function App() {
   const upW   = makeUp(setWorkers,   "w4-workers");
   const upI   = makeUp(setInventory, "w4-inventory");
   const upMsg = makeUp(setMessages,  "w4-messages");
+  const upCosts = makeUp(setCosts, "w4-costs");
 
   if(!loaded) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"sans-serif",color:"#999"}}>불러오는 중…</div>;
 
@@ -258,7 +300,7 @@ export default function App() {
         {tab==="clients"  && <ClientsTab  customers={customers} quotes={quotes} schedules={schedules} materials={materials} profile={profile} messages={messages} upC={upC} upQ={upQ} upS={upS}/>}
         {tab==="schedule" && <ScheduleTab schedules={schedules} upS={upS}/>}
         {tab==="stats"    && <StatsTab    quotes={quotes} customers={customers}/>}
-        {tab==="more"     && <MoreTab     materials={materials} profile={profile} quotes={quotes} customers={customers} schedules={schedules} workers={workers} inventory={inventory} messages={messages} upM={upM} upP={upP} upW={upW} upI={upI} upMsg={upMsg}/>}
+        {tab==="more"     && <MoreTab     materials={materials} profile={profile} quotes={quotes} customers={customers} schedules={schedules} workers={workers} inventory={inventory} messages={messages} costs={costs} upM={upM} upP={upP} upW={upW} upI={upI} upMsg={upMsg} upCosts={upCosts}/>}
       </div>
       <nav style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"#fff",borderTop:"1px solid #EEEEE9",display:"flex",zIndex:999}}>
         {TABS.map(t=>(
@@ -408,7 +450,7 @@ function ActionCards({customers,quotes,schedules,workers,inventory,setTab}){
           {!aiLoading&&visible.length===0&&(
             <div style={{background:"#F0FDF4",borderRadius:14,padding:"16px",textAlign:"center",border:"1px solid #BBF7D0",marginBottom:4}}>
               <div style={{fontSize:13,color:"#059669",fontWeight:600}}>오늘 할 일이 없어요 ✓</div>
-              <div style={{fontSize:11,color:"#888",marginTop:4}}>모든 업무가 잘 진행되고 있어요!</div>
+              <div style={{fontSize:11,color:"#888",marginTop:4}}>고객과 견적을 등록하면 AI가 할 일을 알려드려요</div>
             </div>
           )}
         </div>
@@ -429,13 +471,16 @@ function HomeTab({customers,quotes,schedules,profile,workers,inventory,messages,
   const monthRev=completed.filter(q=>q.date?.startsWith(thisMonth)).reduce((s,q)=>s+q.total,0);
   const month=new Date().getMonth()+1;
   const isMovingSeason=[2,3,4,9,10].includes(month);
-  const nextSeason=month<=4?"봄 이사철 (3~4월)":month<=9?"가을 이사철 (9~10월)":"봄 이사철 (3~4월)";
+  const isInterior=profile.industry==="인테리어";
+  const nextSeason=isInterior
+    ?(month<=4?"봄 리모델링 시즌 (3~4월)":month<=9?"가을 리모델링 시즌 (9~10월)":"봄 리모델링 시즌 (3~4월)")
+    :(month<=4?"봄 이사철 (3~4월)":month<=9?"가을 이사철 (9~10월)":"봄 이사철 (3~4월)");
 
   return(
     <div>
       <div style={{background:"#111",padding:"52px 24px 24px",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:-50,right:-50,width:180,height:180,borderRadius:"50%",background:"rgba(255,255,255,0.02)"}}/>
-        <div style={{fontSize:10,color:"#555",letterSpacing:3,marginBottom:8}}>WORKOS · {profile.bizName}</div>
+        <div style={{fontSize:10,color:"#555",letterSpacing:3,marginBottom:8}}>WORKOS · {profile.bizName} | 운영을 더 쉽게</div>
         <div style={{fontSize:11,color:"#666",marginBottom:4}}>누적 매출</div>
         <div style={{fontSize:34,fontWeight:900,color:"#fff",letterSpacing:-1}}>{fmt(totalRev)}</div>
         <div style={{fontSize:12,color:"#555",marginTop:4}}>이번달 {fmt(monthRev)}</div>
@@ -451,7 +496,7 @@ function HomeTab({customers,quotes,schedules,profile,workers,inventory,messages,
         <div style={{background:isMovingSeason?"#111":"#fff",borderRadius:14,padding:"16px",marginBottom:12,border:isMovingSeason?"none":"1px solid #EEEEE9"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
             <div>
-              <div style={{fontSize:11,color:isMovingSeason?"#F0B429":"#AAA",fontWeight:700,marginBottom:4}}>{isMovingSeason?"🔥 지금 이사철이에요!":"📅 "+nextSeason+" 준비하세요"}</div>
+              <div style={{fontSize:11,color:isMovingSeason?"#F0B429":"#AAA",fontWeight:700,marginBottom:4}}>{isMovingSeason?(isInterior?"🔨 지금 리모델링 시즌이에요!":"🔥 지금 이사철이에요!"):"📅 "+nextSeason+" 준비하세요"}</div>
               <div style={{fontSize:13,color:isMovingSeason?"#fff":"#555",fontWeight:isMovingSeason?700:400,lineHeight:1.6}}>{isMovingSeason?"홍보 문자·SNS 지금 올리면 효과 2배예요.":"이사철 전 미리 홍보를 준비해두세요."}</div>
             </div>
             <div style={{fontSize:28}}>{isMovingSeason?"🏠":"📋"}</div>
@@ -1277,15 +1322,17 @@ function StatsTab({quotes,customers}){
 }
 
 // ── MORE TAB ──────────────────────────────────────────────────────────────────
-function MoreTab({materials,profile,quotes,customers,schedules,workers,inventory,messages,upM,upP,upW,upI,upMsg}){
+function MoreTab({materials,profile,quotes,customers,schedules,workers,inventory,messages,costs,upM,upP,upW,upI,upMsg,upCosts}){
   const [section,setSection]=useState("main");
   if(section==="materials") return <MaterialsSection materials={materials} upM={upM} onBack={()=>setSection("main")}/>;
   if(section==="profile")   return <ProfileSection   profile={profile}    upP={upP} onBack={()=>setSection("main")}/>;
   if(section==="workers")   return <WorkersSection   workers={workers}    upW={upW} onBack={()=>setSection("main")}/>;
   if(section==="inventory") return <InventorySection inventory={inventory} upI={upI} schedules={schedules} onBack={()=>setSection("main")}/>;
   if(section==="messages")  return <MessagesSection  messages={messages}  upMsg={upMsg} onBack={()=>setSection("main")}/>;
+  if(section==="costs") return <CostsSection costs={costs} upCosts={upCosts} quotes={quotes} onBack={()=>setSection("main")}/>;
   if(section==="chat")      return <ChatSection      quotes={quotes} customers={customers} schedules={schedules} profile={profile} workers={workers} inventory={inventory} onBack={()=>setSection("main")}/>;
   const menus=[
+    {id:"costs",     icon:"💰",label:"원가 관리",       sub:"인건비·재료비·순이익 분석",  color:"#10B981"},
     {id:"chat",      icon:"🤖",label:"AI 운영 도우미",  sub:"매출·견적 분석 챗봇",       color:"#8B5CF6"},
     {id:"workers",   icon:"👷",label:"직원 관리",        sub:"팀원 현황 및 작업 배정",    color:"#F59E0B"},
     {id:"inventory", icon:"📦",label:"재고 관리",        sub:"소모품 현황 및 발주 알림",  color:"#EF4444"},
@@ -1305,7 +1352,7 @@ function MoreTab({materials,profile,quotes,customers,schedules,workers,inventory
           </Card>
         ))}
         <div style={{marginTop:20,padding:"14px",background:"#F7F7F4",borderRadius:14,border:"1px solid #EEEEE9",textAlign:"center"}}>
-          <div style={S.sub}>WORKOS v6 · 이사청소 업체 운영 OS</div>
+          <div style={S.sub}>WORKOS · 사장님의 시간을 아껴드립니다</div>
         </div>
       </div>
     </div>
@@ -1474,7 +1521,47 @@ function InventorySection({inventory,upI,schedules,onBack}){
     </div>
   );
 }
-
+function CostsSection({costs,upCosts,quotes,onBack}){
+  const [form,setForm]=useState({...costs});
+  const [saved,setSaved]=useState(false);
+  const completed=quotes.filter(q=>q.status==="계약완료");
+  const thisMonth=new Date().toISOString().slice(0,7);
+  const monthRev=completed.filter(q=>q.date?.startsWith(thisMonth)).reduce((s,q)=>s+q.total,0);
+  const tax=Math.round(monthRev*(form.taxRate/100));
+  const material=Math.round(monthRev*(form.materialRate/100));
+  const netProfit=monthRev-form.fixedMonthly-material-tax;
+  const margin=monthRev>0?Math.round(netProfit/monthRev*100):0;
+  const save=()=>{upCosts({...form});setSaved(true);setTimeout(()=>setSaved(false),2000);};
+  return(
+    <div>
+      <PH title="원가 관리" sub="순이익·마진율 분석" onBack={onBack}/>
+      <div style={{padding:"0 16px"}}>
+        <div style={{background:"#111",borderRadius:16,padding:"20px",marginBottom:14,color:"#fff"}}>
+          <div style={{fontSize:11,color:"#555",marginBottom:4}}>이번달 순이익 추정</div>
+          <div style={{fontSize:34,fontWeight:900,letterSpacing:-1,color:netProfit>=0?"#fff":"#F87171"}}>{fmt(netProfit)}</div>
+          <div style={{display:"flex",gap:16,marginTop:12,paddingTop:12,borderTop:"1px solid #222"}}>
+            <div><div style={{fontSize:10,color:"#555"}}>매출</div><div style={{fontSize:13,fontWeight:700}}>{fmt(monthRev)}</div></div>
+            <div><div style={{fontSize:10,color:"#555"}}>재료비</div><div style={{fontSize:13,fontWeight:700,color:"#F87171"}}>-{fmt(material)}</div></div>
+            <div><div style={{fontSize:10,color:"#555"}}>고정비</div><div style={{fontSize:13,fontWeight:700,color:"#F87171"}}>-{fmt(form.fixedMonthly)}</div></div>
+            <div><div style={{fontSize:10,color:"#555"}}>세금</div><div style={{fontSize:13,fontWeight:700,color:"#F87171"}}>-{fmt(tax)}</div></div>
+          </div>
+          <div style={{marginTop:10,fontSize:12,color:"#888"}}>마진율 <span style={{color:margin>=30?"#10B981":margin>=20?"#F59E0B":"#F87171",fontWeight:700}}>{margin}%</span> {margin>=30?"✓ 양호":margin>=20?"— 보통":"⚠ 낮음"}</div>
+        </div>
+        <div style={{...S.alertBlue,marginBottom:14}}>
+          <div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginBottom:2}}>💡 마진율 가이드</div>
+          <div style={{fontSize:10,color:"#888",lineHeight:1.7}}>{"청소업: 평균 35~45% · 인테리어: 평균 20~30%\n30% 이하면 단가 조정을 고려해보세요"}</div>
+        </div>
+        <SL>고정비 (월)</SL>
+        <input value={form.fixedMonthly} onChange={e=>setForm(p=>({...p,fixedMonthly:Number(e.target.value)||0}))} placeholder="차량·공구·보험 등" type="number" style={{...IS,marginBottom:12}}/>
+        <SL>재료비 비율 (%)</SL>
+        <input value={form.materialRate} onChange={e=>setForm(p=>({...p,materialRate:Number(e.target.value)||0}))} placeholder="매출 대비 재료비 %" type="number" style={{...IS,marginBottom:12}}/>
+        <SL>세금 비율 (%)</SL>
+        <input value={form.taxRate} onChange={e=>setForm(p=>({...p,taxRate:Number(e.target.value)||0}))} placeholder="부가세 등 (기본 10%)" type="number" style={{...IS,marginBottom:14}}/>
+        <BigBtn onClick={save}>{saved?"✓ 저장됐어요!":"저장"}</BigBtn>
+      </div>
+    </div>
+  );
+}
 // ── AI CHAT ───────────────────────────────────────────────────────────────────
 function ChatSection({quotes,customers,schedules,profile,workers,inventory,onBack}){
   const [msgs,setMsgs]=useState([{role:"assistant",text:`안녕하세요! ${profile.bizName} 운영 도우미입니다 🤖\n\n매출, 견적, 직원, 재고 뭐든 물어보세요!`}]);
