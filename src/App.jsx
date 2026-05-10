@@ -138,7 +138,7 @@ const PRIORITY_STYLE = {
 };
 
 // ── APP ───────────────────────────────────────────────────────────────────────
-function OnboardingModal({profile,upP,customers,upC,onClose}){
+function OnboardingModal({profile,upP,customers,upC,upM,upI,upMsg,onClose}){
   const [step,setStep]=useState(1);
   const [bizName,setBizName]=useState(profile.bizName||"");
   const [phone,setPhone]=useState(profile.phone||"");
@@ -155,9 +155,9 @@ function OnboardingModal({profile,upP,customers,upC,onClose}){
   const saveProfile=()=>{
     if(!bizName.trim()) return;
     upP({...profile,bizName,phone,industry});
-    store.set("w4-inventory", JSON.stringify(industry==="인테리어" ? INTERIOR_INVENTORY : DEFAULT_INVENTORY));
-    store.set("w4-messages", JSON.stringify(getDefaultMessages(industry)));
-    store.set("w4-materials", JSON.stringify(industry==="인테리어" ? INTERIOR_MATERIALS : DEFAULT_MATERIALS));
+    upM(industry==="인테리어" ? INTERIOR_MATERIALS : DEFAULT_MATERIALS);
+    upI(industry==="인테리어" ? INTERIOR_INVENTORY : DEFAULT_INVENTORY);
+    upMsg(getDefaultMessages(industry));
     setStep(2);
   };
 
@@ -308,6 +308,9 @@ export default function App() {
             upP={upP}
             customers={customers}
             upC={upC}
+            upM={upM}
+            upI={upI}
+            upMsg={upMsg}
             onClose={()=>{store.set("w4-onboarding-done",true);setShowOnboarding(false);}}
           />
         )}
