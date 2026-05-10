@@ -155,6 +155,9 @@ function OnboardingModal({profile,upP,customers,upC,onClose}){
   const saveProfile=()=>{
     if(!bizName.trim()) return;
     upP({...profile,bizName,phone,industry});
+    store.set("w4-inventory", JSON.stringify(industry==="인테리어" ? INTERIOR_INVENTORY : DEFAULT_INVENTORY));
+    store.set("w4-messages", JSON.stringify(getDefaultMessages(industry)));
+    store.set("w4-materials", JSON.stringify(industry==="인테리어" ? INTERIOR_MATERIALS : DEFAULT_MATERIALS));
     setStep(2);
   };
 
