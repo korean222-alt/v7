@@ -1338,7 +1338,7 @@ function MoreTab({materials,profile,quotes,customers,schedules,workers,inventory
   const [section,setSection]=useState("main");
   if(section==="materials") return <MaterialsSection materials={materials} upM={upM} onBack={()=>setSection("main")}/>;
   if(section==="profile")   return <ProfileSection   profile={profile}    upP={upP} onBack={()=>setSection("main")}/>;
-  if(section==="workers")   return <WorkersSection   workers={workers}    upW={upW} onBack={()=>setSection("main")}/>;
+  if(section==="workers")   return <WorkersSection   workers={workers}    upW={upW} onBack={()=>setSection("main")} profile={profile}/>;
   if(section==="inventory") return <InventorySection inventory={inventory} upI={upI} schedules={schedules} onBack={()=>setSection("main")}/>;
   if(section==="messages")  return <MessagesSection  messages={messages}  upMsg={upMsg} onBack={()=>setSection("main")}/>;
   if(section==="costs") return <CostsSection costs={costs} upCosts={upCosts} quotes={quotes} onBack={()=>setSection("main")}/>;
@@ -1456,9 +1456,11 @@ function ProfileSection({profile,upP,onBack}){
   );
 }
 
-function WorkersSection({workers,upW,onBack}){
+function WorkersSection({workers,upW,onBack,profile}){
   const [form,setForm]=useState({name:"",phone:"",specialty:"입주청소"});
-  const specialties=["입주청소","이사짐정리","특수청소","전체"];
+  const specialties=profile?.industry==="인테리어"
+  ? ["도배","장판","타일","목공","전기","전체"]
+  : ["입주청소","이사짐정리","특수청소","전체"];
 const [customSpecialty,setCustomSpecialty]=useState("");
   return(
     <div>
