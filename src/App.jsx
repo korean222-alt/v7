@@ -100,19 +100,30 @@ const DEFAULT_COSTS = {
   fixedMonthly: 500000,
   taxRate: 10,
 };
+const INTERIOR_INVENTORY = [
+  {id:"inv1",label:"실리콘",unit:"개",stock:10,minStock:3,perJob:1},
+  {id:"inv2",label:"마스킹 테이프",unit:"개",stock:20,minStock:5,perJob:2},
+  {id:"inv3",label:"사포",unit:"장",stock:30,minStock:10,perJob:5},
+  {id:"inv4",label:"페인트 롤러",unit:"개",stock:5,minStock:2,perJob:1},
+];
 const DEFAULT_INVENTORY = [
   {id:"inv1",label:"다목적 세제",unit:"개",stock:5,minStock:2,perJob:0.5},
   {id:"inv2",label:"욕실 곰팡이 제거제",unit:"개",stock:3,minStock:1,perJob:0.3},
   {id:"inv3",label:"극세사 걸레",unit:"장",stock:20,minStock:5,perJob:2},
   {id:"inv4",label:"비닐장갑",unit:"켤레",stock:30,minStock:10,perJob:1},
 ];
-const DEFAULT_MESSAGES = {
-  movingSeason1:"봄 이사철 맞이 특별 이벤트! 3~4월 예약 시 에어컨 필터 청소 무료 제공 🏠\n이사 전후 청소는 {bizName}에게 맡겨주세요. 빠르고 꼼꼼하게 해드립니다!",
-  movingSeason2:"이사 앞두고 계신가요? 합리적인 가격으로 새 집 새 출발 도와드릴게요 😊\n지금 예약하시면 우선 배정해드립니다!",
-  referral:"안녕하세요 {name}님 😊\n작업이 만족스러우셨으면 좋겠습니다!\n혹시 이사 계획 있는 지인분이 계시다면 저희를 소개해주세요 🙏\n소개해주신 분께는 청소 비용 10% 할인 혜택 드립니다!",
+const getDefaultMessages = (industry) => ({
+  movingSeason1: industry==="인테리어"
+    ? "봄 리모델링 시즌 특별 이벤트! 3~4월 시공 예약 시 도배 무료 제공 🏠\n인테리어 공사는 {bizName}에게 맡겨주세요. 꼼꼼하게 시공해드립니다!"
+    : "봄 이사철 맞이 특별 이벤트! 3~4월 예약 시 에어컨 필터 청소 무료 제공 🏠\n이사 전후 청소는 {bizName}에게 맡겨주세요. 빠르고 꼼꼼하게 해드립니다!",
+  movingSeason2: industry==="인테리어"
+    ? "리모델링 계획 있으신가요? 합리적인 가격으로 새 공간 만들어드릴게요 😊\n지금 예약하시면 우선 배정해드립니다!"
+    : "이사 앞두고 계신가요? 합리적인 가격으로 새 집 새 출발 도와드릴게요 😊\n지금 예약하시면 우선 배정해드립니다!",
+  referral:"안녕하세요 {name}님 😊\n작업이 만족스러우셨으면 좋겠습니다!\n혹시 지인분 중에 필요하신 분이 계시다면 저희를 소개해주세요 🙏\n소개해주신 분께는 10% 할인 혜택 드립니다!",
   review:"안녕하세요 {name}님!\n오늘 작업은 만족스러우셨나요? 😊\n짧은 후기 한 줄만 남겨주시면 저희에게 큰 도움이 됩니다 🙏\n감사합니다!",
   overdue:"안녕하세요 {name}님 😊\n지난번 작업 관련하여 입금 확인이 어려워 연락드립니다.\n{amount} 입금 부탁드립니다. 감사합니다!",
-};
+});
+const DEFAULT_MESSAGES = getDefaultMessages("청소");
 
 const KR_HOLIDAYS = new Set([
   "2025-01-01","2025-01-28","2025-01-29","2025-01-30","2025-03-01","2025-05-05","2025-05-06","2025-06-06","2025-08-15","2025-10-03","2025-10-05","2025-10-06","2025-10-07","2025-10-09","2025-12-25",
@@ -253,8 +264,9 @@ export default function App() {
       setMaterials(await store.get("w4-materials")||defaultMats);
       setProfile(savedProfile);
       setWorkers(await store.get("w4-workers")||DEFAULT_WORKERS);
-      setInventory(await store.get("w4-inventory")||DEFAULT_INVENTORY);
-      setMessages(await store.get("w4-messages")||DEFAULT_MESSAGES);
+      const defaultInv = savedProfile.industry==="인테리어" ? INTERIOR_INVENTORY : DEFAULT_INVENTORY;
+      setInventory(await store.get("w4-inventory")||defaultInv);
+      setMessages(await store.get("w4-messages")||getDefaultMessages(savedProfile.industry||"청소"));
       setCosts(await store.get("w4-costs")||DEFAULT_COSTS);
       const done = await store.get("w4-onboarding-done");
       if(!done) setShowOnboarding(true);
@@ -1577,7 +1589,7 @@ function ChatSection({quotes,customers,schedules,profile,workers,inventory,onBac
   const lowStock=inventory?.filter(i=>i.stock<=i.minStock).map(i=>i.label).join(", ")||"없음";
   const doneScheds=schedules.filter(s=>s.actualHours);
   const avgHours=doneScheds.length>0?(doneScheds.reduce((s,sc)=>s+sc.actualHours,0)/doneScheds.length).toFixed(1):"데이터없음";
-  const systemPrompt=`너는 "${profile.bizName}" 이사청소 업체 운영 도우미야. 친근하고 실용적인 어시스턴트.\n\n현황:\n- 고객 ${customers.length}명 / 견적 ${quotes.length}건 / 계약완료 ${completed.length}건 / 전환율 ${convRate}%\n- 누적매출 ${totalRev.toLocaleString()}원 / 이번달 ${monthRev.toLocaleString()}원\n- 미수금 ${unpaid.length}건 (${unpaid.reduce((s,q)=>s+q.total,0).toLocaleString()}원)\n- 활성직원: ${activeWorkers}\n- 재고부족: ${lowStock}\n- 평균작업시간: ${avgHours}h\n고객: ${customers.map(c=>c.name).join(", ")}\n최근견적: ${quotes.slice(-3).map(q=>`${q.customerName} ${q.total.toLocaleString()}원(${q.status})`).join(", ")}\n\n짧고 실용적으로. 한국어. 이모지 적당히.`;
+  const systemPrompt=`너는 "${profile.bizName}" ${profile.industry==="인테리어"?"인테리어 업체":"이사청소 업체"} 운영 도우미야. 친근하고 실용적인 어시스턴트.\n\n현황:\n- 고객 ${customers.length}명 / 견적 ${quotes.length}건 / 계약완료 ${completed.length}건 / 전환율 ${convRate}%\n- 누적매출 ${totalRev.toLocaleString()}원 / 이번달 ${monthRev.toLocaleString()}원\n- 미수금 ${unpaid.length}건 (${unpaid.reduce((s,q)=>s+q.total,0).toLocaleString()}원)\n- 활성직원: ${activeWorkers}\n- 재고부족: ${lowStock}\n- 평균작업시간: ${avgHours}h\n고객: ${customers.map(c=>c.name).join(", ")}\n최근견적: ${quotes.slice(-3).map(q=>`${q.customerName} ${q.total.toLocaleString()}원(${q.status})`).join(", ")}\n\n짧고 실용적으로. 한국어. 이모지 적당히.`;
   const send=async()=>{
     if(!input.trim()||loading) return;
     const allowed=await tryUseQuota("chat");
