@@ -821,14 +821,11 @@ function ClientsTab({ customers, quotes, schedules, materials, profile, messages
   const [search, setSearch] = useState("");
   const [lastQ, setLastQ] = useState(null);
   const [cloneItems, setCloneItems] = useState(null);
-  const [newCustForm, setNewCustForm] = useState({
+const [newCustForm, setNewCustForm] = useState({
   name: "",
   phone: "",
   address: "",
   notes: "",
-  scheduleDate: "",
-  scheduleTime: "",
-  scheduleMemo: "",
 });
   const filtered = customers.filter(c => c.name.includes(search) || c.phone.includes(search));
 
@@ -874,37 +871,6 @@ function ClientsTab({ customers, quotes, schedules, materials, profile, messages
         </div>
       ))}
 
-      <div style={{ background:"#fff", border:"1px solid #EEEEE9", borderRadius:16, padding:"16px", marginBottom:12 }}>
-        <div style={{ fontSize:13, fontWeight:800, color:"#111", marginBottom:4 }}>
-          📅 일정도 같이 등록
-        </div>
-        <div style={{ fontSize:11, color:"#888", lineHeight:1.5, marginBottom:12 }}>
-          방문일이나 작업일이 정해졌으면 같이 저장하세요. 비워두면 고객만 등록됩니다.
-        </div>
-
-        <div style={{ display:"flex", gap:8, marginBottom:10 }}>
-          <input
-            type="date"
-            value={newCustForm.scheduleDate}
-            onChange={e => setNewCustForm(p => ({ ...p, scheduleDate: e.target.value }))}
-            style={{ ...IS, flex:1, marginBottom:0 }}
-          />
-          <input
-            type="time"
-            value={newCustForm.scheduleTime}
-            onChange={e => setNewCustForm(p => ({ ...p, scheduleTime: e.target.value }))}
-            style={{ ...IS, flex:1, marginBottom:0 }}
-          />
-        </div>
-
-        <input
-          value={newCustForm.scheduleMemo}
-          onChange={e => setNewCustForm(p => ({ ...p, scheduleMemo: e.target.value }))}
-          placeholder="일정 메모 예: 방문 상담, 실측, 작업 예정"
-          style={IS}
-        />
-      </div>
-
       <BigBtn onClick={() => {
         if (!newCustForm.name.trim()) return;
 
@@ -919,36 +885,18 @@ function ClientsTab({ customers, quotes, schedules, materials, profile, messages
 
         upC([...customers, c]);
 
-        if (newCustForm.scheduleDate) {
-          upS([
-            ...schedules,
-            {
-              id: uid(),
-              customerId: c.id,
-              customerName: c.name,
-              date: newCustForm.scheduleDate,
-              time: newCustForm.scheduleTime || "시간 미정",
-              address: c.address || "",
-              status: "예정",
-              notes: newCustForm.scheduleMemo || newCustForm.notes || "",
-            }
-          ]);
-        }
 
         setSelCustomer(c);
         setNewCustForm({
-          name: "",
-          phone: "",
-          address: "",
-          notes: "",
-          scheduleDate: "",
-          scheduleTime: "",
-          scheduleMemo: "",
-        });
+  name: "",
+  phone: "",
+  address: "",
+  notes: "",
+});
 
         setView("detail");
       }}>
-        {newCustForm.scheduleDate ? "고객 + 일정 등록" : "등록 후 상세보기"}
+        등록 후 상세보기
       </BigBtn>
     </div>
   </div>
@@ -1384,18 +1332,32 @@ schedules.forEach(s=>{
     scheduleDates[d].push(s);
   }
 });
-
 const unpaidDates={};
-quotes.filter(q=>q.payStatus==="미수금").forEach(q=>{
-  const linkedSchedule = schedules.find(s=>s.quoteId===q.id);
-  const date = linkedSchedule?.date || q.date;
 
-  if(date?.startsWith(monthKey)){
-    const d=parseInt(date.split("-")[2]);
-    if(!unpaidDates[d]) unpaidDates[d]=[];
-    unpaidDates[d].push(q);
-  }
-});
+quotes
+  .filter(q=>q.payStatus==="미수금")
+  .forEach(q=>{
+    const linkedSchedules = schedules.filter(s =>
+      s.quoteId === q.id || s.customerId === q.customerId
+    );
+
+    if(linkedSchedules.length > 0){
+      linkedSchedules.forEach(s=>{
+        if(s.date?.startsWith(monthKey)){
+          const d=parseInt(s.date.split("-")[2]);
+          if(!unpaidDates[d]) unpaidDates[d]=[];
+          unpaidDates[d].push(q);
+        }
+      });
+      return;
+    }
+
+    if(q.date?.startsWith(monthKey)){
+      const d=parseInt(q.date.split("-")[2]);
+      if(!unpaidDates[d]) unpaidDates[d]=[];
+      unpaidDates[d].push(q);
+    }
+  });
 
 const selSchedules=schedules.filter(s=>s.date===selDate).sort((a,b)=>a.time.localeCompare(b.time));
   const todayStr=today();const DAYS=["일","월","화","수","목","금","토"];
