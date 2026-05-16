@@ -1608,9 +1608,28 @@ function ChatSection({quotes,customers,schedules,profile,workers,inventory,onBac
     try{
       // Vercel 서버리스 필요
       const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:HAIKU,max_tokens:800,system:systemPrompt,messages:newMsgs.filter(m=>m.role!=="assistant"||newMsgs.indexOf(m)>0).map(m=>({role:m.role==="user"?"user":"assistant",content:m.text}))})});
-      const data=await res.json();
-      setMsgs(p=>[...p,{role:"assistant",text:data.content?.[0]?.text||"잠시 후 다시 시도해주세요."}]);
-    }catch{setMsgs(p=>[...p,{role:"assistant",text:"연결에 문제가 있어요."}]);}
+      const data = await res.json();
+
+if (!res.ok) {
+  throw new Error(data.error || "AI 서버 오류");
+}
+
+setMsgs(p => [
+  ...p,
+  {
+    role: "assistant",
+    text: data.content?.[0]?.text || "잠시 후 다시 시도해주세요.",
+  },
+]);
+    } catch (e) {
+  setMsgs(p => [
+    ...p,
+    {
+      role: "assistant",
+      text: `연결에 문제가 있어요: ${e.message}`,
+    },
+  ]);
+}
     setLoading(false);
   };
   const suggestions=["이번달 매출 분석해줘","미수금 어떻게 해야 해?","직원 배정 조언","재고 부족 대응","이사철 홍보 전략"];
