@@ -335,7 +335,7 @@ export default function App() {
         )}
         {tab==="home"     && <HomeTab     customers={customers} quotes={quotes} schedules={schedules} profile={profile} workers={workers} inventory={inventory} messages={messages} setTab={setTab}/>}
         {tab==="clients"  && <ClientsTab  customers={customers} quotes={quotes} schedules={schedules} materials={materials} profile={profile} messages={messages} upC={upC} upQ={upQ} upS={upS}/>}
-        {tab==="schedule" && <ScheduleTab schedules={schedules} upS={upS}/>}
+        {tab==="schedule" && <ScheduleTab schedules={schedules} quotes={quotes} upS={upS}/>}
         {tab==="stats"    && <StatsTab    quotes={quotes} customers={customers}/>}
         {tab==="more"     && <MoreTab     materials={materials} profile={profile} quotes={quotes} customers={customers} schedules={schedules} workers={workers} inventory={inventory} messages={messages} costs={costs} upM={upM} upP={upP} upW={upW} upI={upI} upMsg={upMsg} upCosts={upCosts}/>}
       </div>
@@ -1365,7 +1365,7 @@ function SC({s,onUpdate,onDelete}){
   );
 }
 
-function ScheduleTab({schedules,upS}){
+function ScheduleTab({schedules,quotes=[],upS}){
   const [viewMode,setViewMode]=useState("calendar");const [showAdd,setShowAdd]=useState(false);
   const [form,setForm]=useState({customerName:"",date:"",time:"10:00",address:"",notes:"",status:"예정"});
   const [curYear,setCurYear]=useState(new Date().getFullYear());const [curMonth,setCurMonth]=useState(new Date().getMonth());const [selDate,setSelDate]=useState(today());
@@ -1377,8 +1377,27 @@ function ScheduleTab({schedules,upS}){
   const firstDay=new Date(curYear,curMonth,1).getDay();const daysInMonth=new Date(curYear,curMonth+1,0).getDate();const prevMonthDays=new Date(curYear,curMonth,0).getDate();
   const monthKey=`${curYear}-${String(curMonth+1).padStart(2,"0")}`;
   const scheduleDates={};
-  schedules.forEach(s=>{if(s.date?.startsWith(monthKey)){const d=parseInt(s.date.split("-")[2]);if(!scheduleDates[d])scheduleDates[d]=[];scheduleDates[d].push(s);}});
-  const selSchedules=schedules.filter(s=>s.date===selDate).sort((a,b)=>a.time.localeCompare(b.time));
+schedules.forEach(s=>{
+  if(s.date?.startsWith(monthKey)){
+    const d=parseInt(s.date.split("-")[2]);
+    if(!scheduleDates[d]) scheduleDates[d]=[];
+    scheduleDates[d].push(s);
+  }
+});
+
+const unpaidDates={};
+quotes.filter(q=>q.payStatus==="미수금").forEach(q=>{
+  const linkedSchedule = schedules.find(s=>s.quoteId===q.id);
+  const date = linkedSchedule?.date || q.date;
+
+  if(date?.startsWith(monthKey)){
+    const d=parseInt(date.split("-")[2]);
+    if(!unpaidDates[d]) unpaidDates[d]=[];
+    unpaidDates[d].push(q);
+  }
+});
+
+const selSchedules=schedules.filter(s=>s.date===selDate).sort((a,b)=>a.time.localeCompare(b.time));
   const todayStr=today();const DAYS=["일","월","화","수","목","금","토"];
   const prevMonth=()=>{if(curMonth===0){setCurYear(y=>y-1);setCurMonth(11);}else setCurMonth(m=>m-1);};
   const nextMonth=()=>{if(curMonth===11){setCurYear(y=>y+1);setCurMonth(0);}else setCurMonth(m=>m+1);};
@@ -1405,14 +1424,45 @@ function ScheduleTab({schedules,upS}){
               {Array.from({length:firstDay},(_,i)=><div key={`p-${i}`} style={{padding:"6px 0",textAlign:"center",opacity:0.2}}><span style={{fontSize:13,color:"#888"}}>{prevMonthDays-firstDay+1+i}</span></div>)}
               {Array.from({length:daysInMonth},(_,i)=>{
                 const day=i+1;const dateStr=`${curYear}-${String(curMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-                const isToday=dateStr===todayStr;const isSel=dateStr===selDate;const dayScheds=scheduleDates[day]||[];
+                const isToday=dateStr===todayStr;const isSel=dateStr===selDate;const dayScheds=scheduleDates[day]||[];const dayUnpaids=unpaidDates[day]||[];
                 const dow=(firstDay+i)%7;const isHoliday=KR_HOLIDAYS.has(dateStr)||dow===0;const isSat=dow===6;
                 return(
                   <div key={day} onClick={()=>setSelDate(dateStr)} style={{padding:"6px 0",textAlign:"center",cursor:"pointer",position:"relative"}}>
                     <div style={{width:32,height:32,borderRadius:"50%",background:isSel?"#111":isToday?"#F0F0F0":"transparent",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",transition:"background 0.15s"}}>
                       <span style={{fontSize:14,fontWeight:isToday||isSel?700:400,color:isSel?"#fff":isToday?"#111":isHoliday?"#EF4444":isSat?"#3B82F6":"#333"}}>{day}</span>
                     </div>
-                    {dayScheds.length>0&&<div style={{display:"flex",justifyContent:"center",gap:2,marginTop:2}}>{dayScheds.slice(0,3).map((s,idx)=><div key={idx} style={{width:5,height:5,borderRadius:"50%",background:s.status==="완료"?"#10B981":s.status==="취소"?"#DDD":"#3B82F6"}}/>)}</div>}
+                    {dayScheds.length>0&&(
+  <div style={{display:"flex",justifyContent:"center",gap:2,marginTop:2}}>
+    {dayScheds.slice(0,3).map((s,idx)=>(
+      <div
+        key={idx}
+        style={{
+          width:5,
+          height:5,
+          borderRadius:"50%",
+          background:s.status==="완료"?"#10B981":s.status==="취소"?"#DDD":"#3B82F6"
+        }}
+      />
+    ))}
+  </div>
+)}
+
+{dayUnpaids.length>0&&(
+  <div style={{display:"flex",justifyContent:"center",marginTop:2}}>
+    <span style={{
+      fontSize:8,
+      fontWeight:900,
+      color:"#EF4444",
+      background:"#FEE2E2",
+      border:"1px solid #FECACA",
+      borderRadius:99,
+      padding:"1px 4px",
+      lineHeight:1.2
+    }}>
+      미수
+    </span>
+  </div>
+)}
                   </div>
                 );
               })}
@@ -1430,7 +1480,22 @@ function ScheduleTab({schedules,upS}){
         </div></div>}
         {viewMode==="calendar"&&(
           <div style={{marginTop:14}}>
-            <SL style={{marginBottom:10}}>{selDate===todayStr?"오늘":selDate} · {selSchedules.length}건</SL>
+            <SL style={{marginBottom:10}}>
+  {selDate===todayStr?"오늘":selDate} · {selSchedules.length}건
+  {quotes.filter(q=>{
+    const linkedSchedule = schedules.find(s=>s.quoteId===q.id);
+    const date = linkedSchedule?.date || q.date;
+    return q.payStatus==="미수금" && date===selDate;
+  }).length > 0 && (
+    <span style={{color:"#EF4444",marginLeft:6}}>
+      · 미수 {quotes.filter(q=>{
+        const linkedSchedule = schedules.find(s=>s.quoteId===q.id);
+        const date = linkedSchedule?.date || q.date;
+        return q.payStatus==="미수금" && date===selDate;
+      }).length}건
+    </span>
+  )}
+</SL>
             {selSchedules.length===0?<div style={{background:"#fff",borderRadius:14,padding:"24px",textAlign:"center",border:"1px solid #EEEEE9",color:"#CCC",fontSize:13}}>이 날 일정이 없어요</div>:selSchedules.map(s=><SC key={s.id} s={s} onUpdate={onUpdate} onDelete={onDelete}/>)}
             <div style={{marginTop:16}}>
               <SL>이번달 전체 일정</SL>
