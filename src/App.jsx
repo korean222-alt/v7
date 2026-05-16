@@ -10,8 +10,27 @@ const store = {
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 const uid      = () => Date.now().toString(36) + Math.random().toString(36).slice(2,5);
 const fmt      = n  => n.toLocaleString("ko-KR")+"원";
-const today    = () => new Date().toISOString().split("T")[0];
-const daysDiff = d  => Math.floor((new Date() - new Date(d)) / 86400000);
+const koreaDate = (date = new Date()) => {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().split("T")[0];
+};
+
+const today = () => koreaDate();
+
+const daysDiff = d => {
+  const start = new Date(`${d}T00:00:00+09:00`);
+  const now = new Date();
+  return Math.floor((now - start) / 86400000);
+};
+
+const thisMonthKey = () => today().slice(0, 7);
+
+const addDaysKST = (days) => {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  kst.setUTCDate(kst.getUTCDate() + days);
+  return kst.toISOString().split("T")[0];
+};
 const fill     = (tpl="", vars={}) => tpl.replace(/\{(\w+)\}/g, (_,k) => vars[k] ?? "");
 // ▼ 저장 함수 통합 — setter + storage key를 받아 업데이터 반환
 const makeUp   = (setter, key) => v => { setter(v); store.set(key, v); };
@@ -377,7 +396,7 @@ function ActionCards({customers,quotes,schedules,workers,inventory,setTab}){
       const isMovingSeason=[2,3,4,9,10].includes(month);
       const completed=quotes.filter(q=>q.status==="계약완료");
       const convRate=quotes.length>0?Math.round(completed.length/quotes.length*100):0;
-      const thisMonth=new Date().toISOString().slice(0,7);
+      const thisMonth=thisMonthKey();
       const payload={
         month,isMovingSeason,
         customers:customers.slice(-20).map(c=>({name:c.name,createdAt:c.createdAt})),
@@ -536,7 +555,7 @@ function HomeTab({customers,quotes,schedules,profile,workers,inventory,messages,
   const unpaid=quotes.filter(q=>q.payStatus==="미수금");
   const unpaidTotal=unpaid.reduce((s,q)=>s+q.total,0);
   const upcoming=schedules.filter(s=>s.date>=today()).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,2);
-  const thisMonth=new Date().toISOString().slice(0,7);
+  const thisMonth=thisMonthKey();
   const monthRev=completed.filter(q=>q.date?.startsWith(thisMonth)).reduce((s,q)=>s+q.total,0);
   const month=new Date().getMonth()+1;
   const isMovingSeason=[2,3,4,9,10].includes(month);
@@ -937,7 +956,21 @@ function ClientsTab({ customers, quotes, schedules, materials, profile, messages
             </div>
           )}
 
-          <OutBtn onClick={() => { if (!window.confirm("삭제?")) return; upC(customers.filter(cc => cc.id !== c.id)); setView("list"); }} style={{ color: "#EF4444" }}>고객 삭제</OutBtn>
+          <OutBtn
+  onClick={() => {
+    if (!window.confirm("고객을 삭제하면 이 고객의 견적과 일정도 함께 삭제됩니다. 삭제할까요?")) return;
+
+    upC(customers.filter(cc => cc.id !== c.id));
+    upQ(quotes.filter(q => q.customerId !== c.id));
+    upS(schedules.filter(s => s.customerId !== c.id));
+
+    setSelCustomer(null);
+    setView("list");
+  }}
+  style={{ color: "#EF4444" }}
+>
+  고객 삭제
+</OutBtn>
         </div>
       </div>
     );
@@ -1025,9 +1058,16 @@ function KakaoExtractor({customers,upC,onDone}){
       {open&&(
         <div style={{background:"#fff",borderRadius:16,padding:"16px",border:"1px solid #EEEEE9"}}>
           <div style={{...S.row,marginBottom:8}}>
-            <div style={S.sub}>카톡 대화 붙여넣기 → 자동 추출</div>
-            <div style={{fontSize:10,color:quotaLeft<=2?"#EF4444":"#AAA"}}>남은횟수 {quotaLeft}/{USAGE_LIMITS.kakao}</div>
-          </div>
+  <div style={S.sub}>카톡 대화 붙여넣기 → 자동 추출</div>
+  <div style={{fontSize:10,color:quotaLeft<=2?"#EF4444":"#AAA"}}>
+    남은횟수 {quotaLeft}/{USAGE_LIMITS.kakao}
+  </div>
+</div>
+
+<div style={{background:"#FFFBEB",border:"1px solid #FEF3C7",borderRadius:10,padding:"9px 10px",fontSize:10,color:"#92400E",lineHeight:1.5,marginBottom:8}}>
+  개인정보 안내: 붙여넣은 대화 내용은 고객 정보 추출을 위해 AI 서버로 전송될 수 있어요.<br/>
+  주민번호, 계좌번호, 비밀번호 같은 민감정보는 넣지 마세요.
+</div>
           <textarea value={text} onChange={e=>{setText(e.target.value);setResult(null);setErr("");}} placeholder={"고객: 안녕하세요 이사 청소 문의드려요\n고객: 강남구 역삼동 5월 10일 가능할까요?\n고객: 010-1234-5678이에요"} style={{...IS,height:100,resize:"none",lineHeight:1.6,marginBottom:8,fontSize:12}}/>
           {err&&<div style={{fontSize:11,color:"#EF4444",marginBottom:8}}>{err}</div>}
           {!result&&<button onClick={extract} disabled={loading||!text.trim()||quotaLeft<=0} style={{width:"100%",padding:12,background:loading||!text.trim()||quotaLeft<=0?"#EEEEE9":"#8B5CF6",color:loading||!text.trim()||quotaLeft<=0?"#AAA":"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:loading||!text.trim()||quotaLeft<=0?"not-allowed":"pointer",fontFamily:"inherit"}}>{loading?"AI가 읽는 중...":quotaLeft<=0?"오늘 한도 초과":"🔍 자동 추출"}</button>}
@@ -1554,7 +1594,7 @@ const [customSpecialty,setCustomSpecialty]=useState("");
 
 function InventorySection({inventory,upI,schedules,onBack}){
   const [form,setForm]=useState({label:"",unit:"개",stock:"",minStock:"",perJob:""});
-  const upcomingCount=schedules.filter(s=>s.date>=today()&&s.date<=new Date(Date.now()+7*86400000).toISOString().split("T")[0]).length;
+  const upcomingCount=schedules.filter(s=>s.date>=today()&&s.date<=addDaysKST(7)).length;
   return(
     <div>
       <PH title="재고 관리" sub="소모품 현황 및 발주 알림" onBack={onBack}/>
@@ -1575,7 +1615,19 @@ function InventorySection({inventory,upI,schedules,onBack}){
               </div>
               <div style={{...S.rowMid,gap:8}}>
                 <span style={S.sub}>현재</span>
-                <input defaultValue={item.stock} onBlur={e=>upI(inventory.map(i=>i.id===item.id?{...i,stock:parseFloat(e.target.value)||i.stock}:i))} type="number" style={{width:60,padding:"6px 10px",border:`1.5px solid ${isLow?"#FECACA":"#EEEEE9"}`,borderRadius:8,fontSize:13,textAlign:"center",fontFamily:"inherit",outline:"none"}}/>
+                <input
+  defaultValue={item.stock}
+  onBlur={e=>{
+    const value = parseFloat(e.target.value);
+    upI(inventory.map(i =>
+      i.id===item.id
+        ? {...i, stock: Number.isNaN(value) ? i.stock : value}
+        : i
+    ));
+  }}
+  type="number"
+  style={{width:60,padding:"6px 10px",border:`1.5px solid ${isLow?"#FECACA":"#EEEEE9"}`,borderRadius:8,fontSize:13,textAlign:"center",fontFamily:"inherit",outline:"none"}}
+/>
                 <span style={S.sub}>{item.unit} / 최소 {item.minStock}{item.unit}</span>
               </div>
             </div>
@@ -1586,7 +1638,29 @@ function InventorySection({inventory,upI,schedules,onBack}){
           {[{k:"label",p:"항목명 *"},{k:"unit",p:"단위 (개,장,리터)"},{k:"stock",p:"현재 재고",t:"number"},{k:"minStock",p:"최소 재고",t:"number"},{k:"perJob",p:"작업 1건당 소비량",t:"number"}].map(f=>(
             <input key={f.k} value={form[f.k]} onChange={e=>setForm(p=>({...p,[f.k]:e.target.value}))} placeholder={f.p} type={f.t||"text"} style={{...IS,marginBottom:8}}/>
           ))}
-          <BigBtn onClick={()=>{if(!form.label||!form.stock)return;upI([...inventory,{id:uid(),label:form.label,unit:form.unit||"개",stock:parseFloat(form.stock),minStock:parseFloat(form.minStock)||0,perJob:parseFloat(form.perJob)||0}]);setForm({label:"",unit:"개",stock:"",minStock:"",perJob:""});}}>항목 추가</BigBtn>
+          <BigBtn onClick={()=>{
+  if(!form.label.trim()) return;
+
+  const stock = parseFloat(form.stock);
+  const minStock = parseFloat(form.minStock);
+  const perJob = parseFloat(form.perJob);
+
+  upI([
+    ...inventory,
+    {
+      id: uid(),
+      label: form.label.trim(),
+      unit: form.unit || "개",
+      stock: Number.isNaN(stock) ? 0 : stock,
+      minStock: Number.isNaN(minStock) ? 0 : minStock,
+      perJob: Number.isNaN(perJob) ? 0 : perJob,
+    }
+  ]);
+
+  setForm({label:"",unit:"개",stock:"",minStock:"",perJob:""});
+}}>
+  항목 추가
+</BigBtn>
         </div>
       </div>
     </div>
@@ -1596,7 +1670,7 @@ function CostsSection({costs,upCosts,quotes,onBack}){
   const [form,setForm]=useState({...costs});
   const [saved,setSaved]=useState(false);
   const completed=quotes.filter(q=>q.status==="계약완료");
-  const thisMonth=new Date().toISOString().slice(0,7);
+  const thisMonth=thisMonthKey();
   const monthRev=completed.filter(q=>q.date?.startsWith(thisMonth)).reduce((s,q)=>s+q.total,0);
   const tax=Math.round(monthRev*(form.taxRate/100));
   const material=Math.round(monthRev*(form.materialRate/100));
@@ -1641,7 +1715,7 @@ function ChatSection({quotes,customers,schedules,profile,workers,inventory,onBac
   useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
   useEffect(()=>{getQuotaLeft("chat").then(setQuotaLeft);},[]);
   const completed=quotes.filter(q=>q.status==="계약완료");const totalRev=completed.reduce((s,q)=>s+q.total,0);
-  const unpaid=quotes.filter(q=>q.payStatus==="미수금");const thisMonth=new Date().toISOString().slice(0,7);
+  const unpaid=quotes.filter(q=>q.payStatus==="미수금");const thisMonth=thisMonthKey();
   const monthRev=completed.filter(q=>q.date?.startsWith(thisMonth)).reduce((s,q)=>s+q.total,0);
   const convRate=quotes.length>0?Math.round(completed.length/quotes.length*100):0;
   const activeWorkers=workers?.filter(w=>w.isActive).map(w=>`${w.name}(${w.specialty})`).join(", ")||"정보없음";
