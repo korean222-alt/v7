@@ -821,7 +821,15 @@ function ClientsTab({ customers, quotes, schedules, materials, profile, messages
   const [search, setSearch] = useState("");
   const [lastQ, setLastQ] = useState(null);
   const [cloneItems, setCloneItems] = useState(null);
-  const [newCustForm, setNewCustForm] = useState({ name: "", phone: "", address: "", notes: "" });
+  const [newCustForm, setNewCustForm] = useState({
+  name: "",
+  phone: "",
+  address: "",
+  notes: "",
+  scheduleDate: "",
+  scheduleTime: "",
+  scheduleMemo: "",
+});
   const filtered = customers.filter(c => c.name.includes(search) || c.phone.includes(search));
 
   if (view === "list") return (
@@ -851,24 +859,100 @@ function ClientsTab({ customers, quotes, schedules, materials, profile, messages
   );
 
   if (view === "addCustomer") return (
-    <div>
-      <PH title="고객 등록" onBack={() => setView("list")} />
-      <div style={{ padding: "0 16px" }}>
-        {[{ k: "name", p: "고객명 *" }, { k: "phone", p: "연락처" }, { k: "address", p: "주소" }, { k: "notes", p: "메모" }].map(x => (
-          <div key={x.k} style={{ marginBottom: 10 }}>
-            <input value={newCustForm[x.k]} onChange={e => setNewCustForm(p => ({ ...p, [x.k]: e.target.value }))} placeholder={x.p} style={IS} />
-          </div>
-        ))}
-        <BigBtn onClick={() => {
-          if (!newCustForm.name) return;
-          const c = { id: uid(), ...newCustForm, createdAt: today() };
-          upC([...customers, c]); setSelCustomer(c);
-          setNewCustForm({ name: "", phone: "", address: "", notes: "" });
-          setView("detail");
-        }}>등록 후 상세보기</BigBtn>
+  <div>
+    <PH title="고객 등록" onBack={() => setView("list")} />
+    <div style={{ padding: "0 16px" }}>
+
+      {[{ k: "name", p: "고객명 *" }, { k: "phone", p: "연락처" }, { k: "address", p: "주소" }, { k: "notes", p: "메모" }].map(x => (
+        <div key={x.k} style={{ marginBottom: 10 }}>
+          <input
+            value={newCustForm[x.k]}
+            onChange={e => setNewCustForm(p => ({ ...p, [x.k]: e.target.value }))}
+            placeholder={x.p}
+            style={IS}
+          />
+        </div>
+      ))}
+
+      <div style={{ background:"#fff", border:"1px solid #EEEEE9", borderRadius:16, padding:"16px", marginBottom:12 }}>
+        <div style={{ fontSize:13, fontWeight:800, color:"#111", marginBottom:4 }}>
+          📅 일정도 같이 등록
+        </div>
+        <div style={{ fontSize:11, color:"#888", lineHeight:1.5, marginBottom:12 }}>
+          방문일이나 작업일이 정해졌으면 같이 저장하세요. 비워두면 고객만 등록됩니다.
+        </div>
+
+        <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+          <input
+            type="date"
+            value={newCustForm.scheduleDate}
+            onChange={e => setNewCustForm(p => ({ ...p, scheduleDate: e.target.value }))}
+            style={{ ...IS, flex:1, marginBottom:0 }}
+          />
+          <input
+            type="time"
+            value={newCustForm.scheduleTime}
+            onChange={e => setNewCustForm(p => ({ ...p, scheduleTime: e.target.value }))}
+            style={{ ...IS, flex:1, marginBottom:0 }}
+          />
+        </div>
+
+        <input
+          value={newCustForm.scheduleMemo}
+          onChange={e => setNewCustForm(p => ({ ...p, scheduleMemo: e.target.value }))}
+          placeholder="일정 메모 예: 방문 상담, 실측, 작업 예정"
+          style={IS}
+        />
       </div>
+
+      <BigBtn onClick={() => {
+        if (!newCustForm.name.trim()) return;
+
+        const c = {
+          id: uid(),
+          name: newCustForm.name.trim(),
+          phone: newCustForm.phone,
+          address: newCustForm.address,
+          notes: newCustForm.notes,
+          createdAt: today(),
+        };
+
+        upC([...customers, c]);
+
+        if (newCustForm.scheduleDate) {
+          upS([
+            ...schedules,
+            {
+              id: uid(),
+              customerId: c.id,
+              customerName: c.name,
+              date: newCustForm.scheduleDate,
+              time: newCustForm.scheduleTime || "시간 미정",
+              address: c.address || "",
+              status: "예정",
+              notes: newCustForm.scheduleMemo || newCustForm.notes || "",
+            }
+          ]);
+        }
+
+        setSelCustomer(c);
+        setNewCustForm({
+          name: "",
+          phone: "",
+          address: "",
+          notes: "",
+          scheduleDate: "",
+          scheduleTime: "",
+          scheduleMemo: "",
+        });
+
+        setView("detail");
+      }}>
+        {newCustForm.scheduleDate ? "고객 + 일정 등록" : "등록 후 상세보기"}
+      </BigBtn>
     </div>
-  );
+  </div>
+);
 
   if (view === "detail" && selCustomer) {
     const c = selCustomer;
