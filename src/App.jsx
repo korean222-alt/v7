@@ -390,7 +390,13 @@ function ActionCards({customers,quotes,schedules,workers,inventory,setTab}){
         // Vercel 서버리스 필요
       const res=await fetch("/api/chat",{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:HAIKU,max_tokens:700,messages:[{role:"user",content:`너는 이사청소 업체 운영 AI야. 데이터를 종합해서 사장님이 지금 해야 할 액션 카드 최대 3개 생성.\n규칙 기반(미수금/재고부족/팔로업)은 이미 있으니 AI만 판단할 종합 인사이트만.\n반드시 JSON 배열만 응답. 마크다운 없음.\n[{"priority":"red|yellow|green|blue","title":"짧은제목","desc":"한줄설명","action":"버튼텍스트","actionType":"copy|navigate","actionTarget":"복사내용 또는 clients/schedule/more","dismissible":true}]\n없으면 []\n\n데이터:\n${JSON.stringify(payload)}`}]})
+        body:JSON.stringify({model:HAIKU,max_tokens:700,messages:[{role:"user",content:`너는 이사청소 업체 운영 AI야. 데이터를 종합해서 사장님이 지금 해야 할 액션 카드 최대 3개 생성.\n규칙 기반(미수금/재고부족/팔로업)은 이미 있으니 AI만 판단할 종합 인사이트만.\n반드시 JSON 배열만 응답. 마크다운 없음.\n[{"priority":"red|yellow|green|blue","title":"짧은제목","desc":"한줄설명","action":"버튼텍스트","actionType":"copy|navigate","actionTarget":"copy면 복사내용, navigate면 반드시 home|clients|schedule|stats|more 중 하나","dismissible":true}]
+navigate 규칙:
+- 고객/견적/미수금/팔로업 관련은 clients
+- 일정/예약/캘린더 관련은 schedule
+- 매출/분석/전환율 관련은 stats
+- 근로자/직원/재고/단가표/원가/업체설정/문구 관련은 more
+- workers, inventory, costs, profile 같은 없는 탭 이름은 절대 쓰지 말 것\n없으면 []\n\n데이터:\n${JSON.stringify(payload)}`}]})
       });
       const data=await res.json();
       const raw=data.content?.[0]?.text||"[]";
@@ -424,13 +430,58 @@ function ActionCards({customers,quotes,schedules,workers,inventory,setTab}){
   };
   const toggleCollapse=()=>{const next=!collapsed;setCollapsed(next);store.set("w4-cards-collapsed",next);};
   const handleAction=async(card)=>{
-    if(card.actionType==="navigate") setTab(card.actionTarget);
-    else{
-      try{await navigator.clipboard.writeText(card.actionTarget);}catch{}
-      setCopyOk(p=>({...p,[card.id]:true}));
-      setTimeout(()=>setCopyOk(p=>({...p,[card.id]:false})),2000);
-    }
-  };
+  if(card.actionType==="navigate"){
+    const raw = String(card.actionTarget || "").trim().toLowerCase();
+
+    const targetMap = {
+      home: "home",
+
+      clients: "clients",
+      client: "clients",
+      customers: "clients",
+      customer: "clients",
+      quotes: "clients",
+      quote: "clients",
+      estimate: "clients",
+      estimates: "clients",
+
+      schedule: "schedule",
+      schedules: "schedule",
+      calendar: "schedule",
+      booking: "schedule",
+      bookings: "schedule",
+
+      stats: "stats",
+      stat: "stats",
+      analysis: "stats",
+      analytics: "stats",
+      revenue: "stats",
+
+      more: "more",
+      workers: "more",
+      worker: "more",
+      staff: "more",
+      recruit: "more",
+      recruiting: "more",
+      inventory: "more",
+      stock: "more",
+      materials: "more",
+      material: "more",
+      costs: "more",
+      cost: "more",
+      profile: "more",
+      messages: "more",
+      settings: "more",
+    };
+
+    setTab(targetMap[raw] || "more");
+    return;
+  }
+
+  try{await navigator.clipboard.writeText(card.actionTarget || "");}catch{}
+  setCopyOk(p=>({...p,[card.id]:true}));
+  setTimeout(()=>setCopyOk(p=>({...p,[card.id]:false})),2000);
+};
 
   return(
     <div style={{marginBottom:14}}>
