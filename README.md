@@ -20,12 +20,12 @@ Vercel 프로젝트 설정 → Environment Variables:
 |---|---|---|
 | `AI_PROVIDER` | `gemini` | 기본값. `anthropic`으로 바꾸면 되돌아간다 |
 | `GEMINI_API_KEY` | (Google AI Studio 키) | 필수 |
-| `GEMINI_TEXT_MODEL` | `gemini-2.5-flash-lite` | 생략 가능 |
-| `GEMINI_VISION_MODEL` | `gemini-2.5-flash` | 생략 가능 |
+| `GEMINI_TEXT_MODEL` | `gemini-3.5-flash` | 생략 가능 |
+| `GEMINI_VISION_MODEL` | `gemini-3.5-flash` | 생략 가능 |
 | `ANTHROPIC_API_KEY` | — | `AI_PROVIDER=anthropic`일 때만 |
 
-사진 분석만 상위 모델을 쓰고 나머지(카톡 추출·액션카드·상담)는 flash-lite로
-간다. 무료 한도가 4배라 이렇게 나눠야 하루가 버틴다.
+텍스트·사진 모두 `gemini-3.5-flash`를 쓴다. 환경변수를 둘로 나눠둔 건 나중에
+사진만 상위 모델로 올리고 싶을 때 코드를 안 고치려는 것이다.
 
 ### 무료 한도는 프로젝트 단위다 ⚠️
 
@@ -33,11 +33,11 @@ Vercel 프로젝트 설정 → Environment Variables:
 
 | 모델 | 분당 | 하루 |
 |---|---|---|
-| gemini-2.5-flash | 10회 | 250회 |
-| gemini-2.5-flash-lite | 15회 | 1,000회 |
+| gemini-3.5-flash | 15회 | 1,500회 |
 
 앱은 사용자 1명에게 하루 34회(사진 4·상담 20·카톡 추출 10)를 허용한다.
-텍스트 기준으로 **하루 30명 정도가 한계**고, 넘으면 모두가 429를 받는다.
+**하루 40명 정도가 한계**고, 넘으면 모두가 429를 받는다.
+분당 15회 제한도 있어서 여러 명이 동시에 쓰면 순간적으로 막힐 수 있다.
 한도가 차면 화면에 "오늘 AI 사용량이 모두 찼어요"가 뜬다.
 
 파일럿(1~3명)에는 넉넉하지만, 늘어나면 유료 티어로 올려야 한다.

@@ -7,8 +7,8 @@
 // 환경변수
 //   AI_PROVIDER          "gemini"(기본) | "anthropic"
 //   GEMINI_API_KEY       Google AI Studio 키
-//   GEMINI_TEXT_MODEL    기본 gemini-2.5-flash-lite  (무료 1,000회/일)
-//   GEMINI_VISION_MODEL  기본 gemini-2.5-flash       (무료   250회/일)
+//   GEMINI_TEXT_MODEL    기본 gemini-3.5-flash  (무료 15 RPM / 1,500회 하루)
+//   GEMINI_VISION_MODEL  기본 gemini-3.5-flash
 //   ANTHROPIC_API_KEY    AI_PROVIDER=anthropic 일 때만
 
 export const config = { runtime: "edge" };
@@ -63,17 +63,18 @@ const callGemini = async (body) => {
     return json({ error: "GEMINI_API_KEY 환경 변수가 설정되지 않았습니다." }, 500);
   }
 
-  // 사진 분석만 상위 모델을 쓴다. 텍스트 작업(카톡 추출·액션카드·상담)은
-  // flash-lite로 충분한데 무료 한도가 4배라, 이렇게 나눠야 하루가 버틴다.
+  // 3.5 flash는 무료 한도가 하루 1,500회라 텍스트·사진을 나눌 이유가 없다.
+  // 그래도 둘을 따로 둔 건, 나중에 사진만 상위 모델로 올리고 싶을 때
+  // 환경변수만 바꾸면 되게 하려는 것이다.
   const model = hasImage(body.messages)
-    ? process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash"
-    : process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash-lite";
+    ? process.env.GEMINI_VISION_MODEL || "gemini-3.5-flash"
+    : process.env.GEMINI_TEXT_MODEL || "gemini-3.5-flash";
 
   const payload = {
     contents: toGeminiContents(body.messages),
     generationConfig: {
       maxOutputTokens: body.max_tokens ?? 1000,
-      // 2.5 계열은 기본으로 "생각"을 하는데 그 토큰도 maxOutputTokens에서
+      // 최근 Gemini는 기본으로 "생각"을 하는데 그 토큰도 maxOutputTokens에서
       // 깎인다. 짧은 JSON을 뽑는 용도라, 생각하다 예산이 떨어지면 본문이
       // 빈 채로 돌아온다. 그래서 꺼둔다.
       thinkingConfig: { thinkingBudget: 0 },
@@ -93,14 +94,23 @@ const callGemini = async (body) => {
     body: JSON.stringify(payload),
   });
 
-  // thinkingConfig를 아직 안 받는 모델이면 그것만 빼고 한 번 더 시도한다.
-  // 이 필드 하나 때문에 앱 전체가 죽는 걸 막는 안전장치다.
+  // thinkingConfig를 안 받는 모델이면(세대마다 필드 이름이 다르다) 그것만
+  // 빼고 한 번 더 시도한다. 이 필드 하나로 앱 전체가 죽는 걸 막는 장치다.
+  //
+  // 다만 그냥 빼면 모델이 생각하는 데 토큰을 쓰고 정작 본문이 빈 채로
+  // 돌아올 수 있다. 그래서 재시도할 땐 출력 예산을 넉넉히 준다.
   if (res.status === 400) {
     const { thinkingConfig, ...restCfg } = payload.generationConfig;
     res = await fetch(url(model), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, generationConfig: restCfg }),
+      body: JSON.stringify({
+        ...payload,
+        generationConfig: {
+          ...restCfg,
+          maxOutputTokens: Math.min((body.max_tokens ?? 1000) * 4, 8000),
+        },
+      }),
     });
   }
 
