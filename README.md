@@ -20,12 +20,28 @@ Vercel 프로젝트 설정 → Environment Variables:
 |---|---|---|
 | `AI_PROVIDER` | `gemini` | 기본값. `anthropic`으로 바꾸면 되돌아간다 |
 | `GEMINI_API_KEY` | (Google AI Studio 키) | 필수 |
-| `GEMINI_TEXT_MODEL` | `gemini-3.5-flash` | 생략 가능 |
-| `GEMINI_VISION_MODEL` | `gemini-3.5-flash` | 생략 가능 |
+| `GEMINI_TEXT_MODEL` | (비워둠) | 특정 모델을 강제할 때만 |
+| `GEMINI_VISION_MODEL` | (비워둠) | 위와 같음 |
 | `ANTHROPIC_API_KEY` | — | `AI_PROVIDER=anthropic`일 때만 |
 
-텍스트·사진 모두 `gemini-3.5-flash`를 쓴다. 환경변수를 둘로 나눠둔 건 나중에
-사진만 상위 모델로 올리고 싶을 때 코드를 안 고치려는 것이다.
+### 모델 이름은 박아두지 않는다
+
+모델을 하드코딩하면 구글이 갈아치울 때마다 앱이 멈춘다. 실제로 겪은 일이다.
+
+- `gemini-2.0-*` → 2026년 6월 셧다운
+- `gemini-2.5-flash-lite` → "신규 사용자에게 더 이상 제공되지 않음"
+
+그래서 `/api/chat`이 이 순서로 버틴다.
+
+1. `gemini-flash-latest` — 버전이 안 박힌 별칭. 구글이 알아서 최신 GA를 가리킨다
+2. `gemini-3.5-flash` → `gemini-3.6-flash`
+3. 그래도 전부 막히면 **`GET /v1beta/models`로 실제 목록을 조회해서** 쓸 수 있는
+   flash 모델을 찾아 쓴다 (한 번 찾으면 재사용)
+
+붐빔(503)·한도(429) 같은 일시적 실패는 0.9초 뒤 한 번 더 시도하고,
+키 오류처럼 다시 해도 똑같은 실패는 재시도 없이 다음 후보로 넘어간다.
+
+**즉 다음에 구글이 또 이름을 바꿔도 코드를 안 고쳐도 된다.**
 
 ### 무료 한도는 프로젝트 단위다 ⚠️
 
