@@ -68,11 +68,12 @@ const modelChain = (forVision) => {
   const pinned = forVision
     ? process.env.GEMINI_VISION_MODEL
     : process.env.GEMINI_TEXT_MODEL;
+  // 좋은 것부터 시도하고, 안 되면 한 급씩 내려간다.
   return [
     pinned,
-    "gemini-flash-latest", // 항상 현재 GA flash를 가리키는 별칭
+    "gemini-3.6-flash", // 현재 최신 워크호스
+    "gemini-flash-latest", // 버전 안 박힌 별칭 (구글이 최신 GA를 가리킴)
     "gemini-3.5-flash",
-    "gemini-3.6-flash",
     discovered, // 아래에서 실제 목록을 조회해 찾아낸 모델
   ].filter((m, i, a) => m && a.indexOf(m) === i);
 };
@@ -98,8 +99,18 @@ const discoverFlashModel = async (key) => {
         /flash/i.test(m.name) &&
         !/preview|exp|image|tts|live/i.test(m.name)
     );
-    // 이름이 짧은 쪽이 대체로 상위 별칭이라 먼저 시도한다
-    usable.sort((a, b) => a.name.length - b.name.length);
+    // 버전이 높은 것부터. 예전엔 "이름이 짧은 것"으로 골랐는데 그러면
+    // gemini-1.5-flash 같은 구형이 뽑힌다 (실제로 그렇게 뽑혔다).
+    const ver = (name) => {
+      const m = name.match(/gemini-(\d+)(?:\.(\d+))?/);
+      return m ? Number(m[1]) * 100 + Number(m[2] || 0) : 0;
+    };
+    usable.sort((a, b) => {
+      const d = ver(b.name) - ver(a.name);
+      if (d !== 0) return d;
+      // 같은 버전이면 lite가 아닌 쪽을 먼저
+      return /lite/i.test(a.name) - /lite/i.test(b.name);
+    });
     const found = usable[0]?.name?.replace(/^models\//, "") || null;
     if (found) discovered = found;
     return found;
