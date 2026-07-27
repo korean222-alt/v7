@@ -122,7 +122,7 @@ const discoverModels = async (key) => {
     });
     discoveredList = usable
       .map((m) => m.name.replace(/^models\//, ""))
-      .slice(0, 8);
+      .slice(0, 4);
     return discoveredList;
   } catch {
     return [];
@@ -140,7 +140,23 @@ const isQuotaZero = (data) => {
   return /"?limit"?:\s*"?0"?/i.test(blob) || /limit:\s*0\b/i.test(blob);
 };
 
+/**
+ * 한 요청에 쓸 수 있는 시간과 시도 횟수.
+ *
+ * 후보를 끝까지 훑게 만들었더니 이번엔 함수가 제한 시간을 넘겨버렸다.
+ * 그러면 Vercel이 JSON이 아닌 오류 페이지를 돌려주고, 앱은 그걸 파싱하다
+ * "The string did not match the expected pattern"으로 죽는다.
+ * 사장님 입장에선 한참 기다린 끝에 알 수 없는 영어가 뜨는 셈이라 최악이다.
+ *
+ * 그래서 끝까지 가는 것보다 제때 포기하는 게 낫다. 안 되면 다음 탭에서
+ * 다시 누르면 되고, 그때는 기억해둔 모델부터 시작하니 훨씬 빠르다.
+ */
+const DEADLINE_MS = Number(process.env.AI_DEADLINE_MS || 12000);
+const MAX_MODELS = Number(process.env.AI_MAX_MODELS || 4);
+
 const callGemini = async (body) => {
+  const startedAt = Date.now();
+  const timeLeft = () => DEADLINE_MS - (Date.now() - startedAt);
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     return json({ error: "GEMINI_API_KEY 환경 변수가 설정되지 않았습니다." }, 500);
@@ -209,7 +225,7 @@ const callGemini = async (body) => {
 
     // 순간 장애일 때만 같은 모델로 한 번 더 (429는 여기 안 옴)
     if (retryableTransient(res.status)) {
-      await sleep(900);
+      await sleep(400);
       ({ res, data } = await callOnce(model, payload.generationConfig));
       if (res.ok) return { ok: true, data, model };
     }
@@ -237,6 +253,8 @@ const callGemini = async (body) => {
   const attempted = new Set();
   const run = async (model) => {
     if (!model || attempted.has(model)) return null;
+    // 남은 시간이 한 번 부를 만큼도 안 되면 여기서 접는다.
+    if (attempted.size >= MAX_MODELS || timeLeft() < 3000) return null;
     attempted.add(model);
     const r = await attemptModel(model);
     if (r.ok) {
@@ -252,11 +270,13 @@ const callGemini = async (body) => {
     if (done) return done;
   }
 
-  // 후보가 전부 막혔다. 이 키로 뭘 쓸 수 있는지 직접 물어보고
-  // 돌아온 목록을 위에서부터 끝까지 시도한다.
-  for (const model of await discoverModels(key)) {
-    const done = await run(model);
-    if (done) return done;
+  // 후보가 전부 막혔다. 시간이 남아 있을 때만 이 키로 뭘 쓸 수 있는지
+  // 직접 물어보고, 돌아온 목록을 순위대로 시도한다.
+  if (timeLeft() > 4000 && attempted.size < MAX_MODELS) {
+    for (const model of await discoverModels(key)) {
+      const done = await run(model);
+      if (done) return done;
+    }
   }
 
   const status = last?.status ?? 500;
@@ -272,8 +292,15 @@ const callGemini = async (body) => {
         ? "AI 서버가 지금 붐벼요. 잠시 뒤에 다시 눌러주세요."
         : "AI 연결에 문제가 있어요. 잠시 뒤에 다시 시도해주세요.";
 
+  const ranOut = timeLeft() < 3000;
   return json(
-    { error: msg, status, tried, detail: last?.data?.error?.message },
+    {
+      error: ranOut && !last ? "AI 응답이 늦어지고 있어요. 다시 한 번 눌러주세요." : msg,
+      status,
+      tried,
+      elapsedMs: Date.now() - startedAt,
+      detail: last?.data?.error?.message,
+    },
     status
   );
 };

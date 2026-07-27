@@ -35,6 +35,35 @@ const fill     = (tpl="", vars={}) => tpl.replace(/\{(\w+)\}/g, (_,k) => vars[k]
 // ▼ 저장 함수 통합 — setter + storage key를 받아 업데이터 반환
 const makeUp   = (setter, key) => v => { setter(v); store.set(key, v); };
 
+
+/**
+ * /api/chat 호출. 응답을 항상 { content?, error? } 모양으로 돌려준다.
+ *
+ * res.json()을 바로 쓰면 안 된다. 서버가 제한 시간을 넘기면 Vercel이 JSON이
+ * 아닌 오류 페이지를 주는데, 그걸 파싱하다 사파리에서
+ * "The string did not match the expected pattern"이 그대로 화면에 뜬다.
+ * 사장님에겐 아무 의미도 없는 문장이라 여기서 한국어로 바꿔서 넘긴다.
+ */
+const askAI = async (payload) => {
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const raw = await res.text();
+    try {
+      const data = JSON.parse(raw);
+      if (!res.ok && !data.error) data.error = "AI 응답에 실패했어요.";
+      return data;
+    } catch {
+      return { error: "AI 응답이 늦어지고 있어요. 잠시 뒤에 다시 눌러주세요." };
+    }
+  } catch {
+    return { error: "인터넷 연결을 확인해주세요." };
+  }
+};
+
 // ── SHARED STYLES ─────────────────────────────────────────────────────────────
 const S = {
   // 레이아웃
@@ -472,17 +501,13 @@ function ActionCards({customers,quotes,schedules,workers,inventory,setTab}){
         stats:{convRate,monthRev:completed.filter(q=>q.date?.startsWith(thisMonth)).reduce((s,q)=>s+q.total,0),unpaidCount:quotes.filter(q=>q.payStatus==="미수금").length,activeWorkers:workers.filter(w=>w.isActive).length,upcomingCount:schedules.filter(s=>s.date>=today()&&s.status==="예정").length},
       };
         // Vercel 서버리스 필요
-      const res=await fetch("/api/chat",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:HAIKU,max_tokens:700,messages:[{role:"user",content:`너는 이사청소 업체 운영 AI야. 데이터를 종합해서 사장님이 지금 해야 할 액션 카드 최대 3개 생성.\n규칙 기반(미수금/재고부족/팔로업)은 이미 있으니 AI만 판단할 종합 인사이트만.\n반드시 JSON 배열만 응답. 마크다운 없음.\n[{"priority":"red|yellow|green|blue","title":"짧은제목","desc":"한줄설명","action":"버튼텍스트","actionType":"copy|navigate","actionTarget":"copy면 복사내용, navigate면 반드시 home|clients|schedule|stats|more 중 하나","dismissible":true}]
+      const data=await askAI({model:HAIKU,max_tokens:700,messages:[{role:"user",content:`너는 이사청소 업체 운영 AI야. 데이터를 종합해서 사장님이 지금 해야 할 액션 카드 최대 3개 생성.\n규칙 기반(미수금/재고부족/팔로업)은 이미 있으니 AI만 판단할 종합 인사이트만.\n반드시 JSON 배열만 응답. 마크다운 없음.\n[{"priority":"red|yellow|green|blue","title":"짧은제목","desc":"한줄설명","action":"버튼텍스트","actionType":"copy|navigate","actionTarget":"copy면 복사내용, navigate면 반드시 home|clients|schedule|stats|more 중 하나","dismissible":true}]
 navigate 규칙:
 - 고객/견적/미수금/팔로업 관련은 clients
 - 일정/예약/캘린더 관련은 schedule
 - 매출/분석/전환율 관련은 stats
 - 근로자/직원/재고/단가표/원가/업체설정/문구 관련은 more
-- workers, inventory, costs, profile 같은 없는 탭 이름은 절대 쓰지 말 것\n없으면 []\n\n데이터:\n${JSON.stringify(payload)}`}]})
-      });
-      const data=await res.json();
+- workers, inventory, costs, profile 같은 없는 탭 이름은 절대 쓰지 말 것\n없으면 []\n\n데이터:\n${JSON.stringify(payload)}`}]});
       const raw=data.content?.[0]?.text||"[]";
       const match=raw.match(/\[[\s\S]*\]/);
       const cards=JSON.parse(match?match[0]:"[]");
@@ -1147,13 +1172,10 @@ function KakaoExtractor({customers,upC,onDone}){
     setQuotaLeft(p=>p-1);setLoading(true);setResult(null);setErr("");
     try{
       // Vercel 서버리스 필요
-      const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:HAIKU,max_tokens:400,messages:[{role:"user",content:`카카오톡 대화에서 고객 정보를 추출해줘. 반드시 JSON 객체만 응답해. 마크다운 없음.\n{"name":"","phone":"","address":"","date":"YYYY-MM-DD 또는 빈문자열","notes":""}\n\n대화:\n${text.slice(0,1500)}`}]})
-      });
-      const data=await res.json();
+      const data=await askAI({model:HAIKU,max_tokens:400,messages:[{role:"user",content:`카카오톡 대화에서 고객 정보를 추출해줘. 반드시 JSON 객체만 응답해. 마크다운 없음.\n{"name":"","phone":"","address":"","date":"YYYY-MM-DD 또는 빈문자열","notes":""}\n\n대화:\n${text.slice(0,1500)}`}]});
       // 서버가 한도 초과 같은 사정을 한국어로 내려준다. 이걸 안 보여주면
       // 사장님은 "추출 실패"만 보고 자기 입력이 잘못된 줄 안다.
-      if(!res.ok||data.error){setErr(data.error||"AI 응답에 실패했어요.");setLoading(false);return;}
+      if(data.error){setErr(data.error);setLoading(false);return;}
       const raw=data.content?.[0]?.text||"{}";
       const match=raw.match(/\{[\s\S]*\}/);
       const parsed=JSON.parse(match?match[0]:raw);
@@ -1237,9 +1259,8 @@ function NewQuoteFlow({customer,materials,quotes,schedules,profile,upQ,upS,onDon
       const preview=await new Promise((res)=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(file);});
       setVisionPreview(preview);
       // Vercel 서버리스 필요
-      const resp=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:HAIKU,max_tokens:600,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:base64}},{type:"text",text:`이사청소 전문가로서 이 사진에서 추가 청소 비용 항목을 찾아주세요.\nJSON만 답하세요:\n{"severity":"경미|보통|심각","summary":"한줄요약","items":[{"label":"항목명","price":숫자,"reason":"이유"}]}\n항목없으면 items:[]. price는 10000~80000.`}]}]})});
-      const data=await resp.json();
-      if(!resp.ok||data.error){setVisionData({severity:"분석실패",summary:data.error||"다시 시도해주세요",items:[]});setVisionLoading(false);return;}
+      const data=await askAI({model:HAIKU,max_tokens:600,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:base64}},{type:"text",text:`이사청소 전문가로서 이 사진에서 추가 청소 비용 항목을 찾아주세요.\nJSON만 답하세요:\n{"severity":"경미|보통|심각","summary":"한줄요약","items":[{"label":"항목명","price":숫자,"reason":"이유"}]}\n항목없으면 items:[]. price는 10000~80000.`}]}]});
+      if(data.error){setVisionData({severity:"분석실패",summary:data.error,items:[]});setVisionLoading(false);return;}
       const raw=(data.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim();
       const match=raw.match(/\{[\s\S]*\}/);
       setVisionData(JSON.parse(match?match[0]:raw));
@@ -2219,12 +2240,7 @@ function ChatSection({quotes,customers,schedules,profile,workers,inventory,onRep
     setMsgs(newMsgs);setInput("");setLoading(true);
     try{
       // Vercel 서버리스 필요
-      const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:HAIKU,max_tokens:800,system:systemPrompt,messages:newMsgs.filter(m=>m.role!=="assistant"||newMsgs.indexOf(m)>0).map(m=>({role:m.role==="user"?"user":"assistant",content:m.text}))})});
-      const data = await res.json();
-
-if (!res.ok) {
-  throw new Error(data.error || "AI 서버 오류");
-}
+      const data=await askAI({model:HAIKU,max_tokens:800,system:systemPrompt,messages:newMsgs.filter(m=>m.role!=="assistant"||newMsgs.indexOf(m)>0).map(m=>({role:m.role==="user"?"user":"assistant",content:m.text}))});
 
 setMsgs(p => [
   ...p,
