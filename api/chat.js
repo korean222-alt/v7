@@ -58,49 +58,59 @@ const hasImage = (messages = []) =>
   );
 
 /**
- * 이번 요청에 쓸 모델 후보들.
+ * 이 키로 실제로 쓸 수 있다고 확인된 모델. 성공하면 여기에 기억해둔다.
  *
- * 모델 이름을 박아두면 구글이 갈아치울 때마다 앱이 멈춘다. 실제로
- * 2.0은 셧다운됐고 2.5-flash-lite는 "신규 사용자에게 더 이상 제공되지
- * 않는다"며 거절당했다. 그래서 버전이 안 박힌 별칭을 맨 앞에 둔다.
+ * 이게 없으면 요청할 때마다 못 쓰는 모델부터 차례로 두드리게 된다.
+ * 무료 티어에 없는 모델은 매번 429를 돌려주므로 그게 곧 낭비다.
  */
+let working = null;
+
+/** 목록 조회로 알아낸 후보들 (버전 내림차순). */
+let discoveredList = [];
+
+/**
+ * 정적 후보. 좋은 것부터, 마지막은 오래됐지만 무료 티어에 남아 있는 것들.
+ *
+ * 무료 티어에 최신 모델이 없는 계정이 많다. 그럴 때 3.x만 늘어놓으면
+ * 전부 429가 나서 "한도 초과"처럼 보이는데, 실제로는 1.5로 내려가면 된다.
+ */
+const STATIC_CHAIN = [
+  "gemini-3.6-flash",
+  "gemini-flash-latest",
+  "gemini-3.5-flash",
+  "gemini-2.5-flash",
+  "gemini-1.5-flash",
+];
+
 const modelChain = (forVision) => {
   const pinned = forVision
     ? process.env.GEMINI_VISION_MODEL
     : process.env.GEMINI_TEXT_MODEL;
-  // 좋은 것부터 시도하고, 안 되면 한 급씩 내려간다.
-  return [
-    pinned,
-    "gemini-3.6-flash", // 현재 최신 워크호스
-    "gemini-flash-latest", // 버전 안 박힌 별칭 (구글이 최신 GA를 가리킴)
-    "gemini-3.5-flash",
-    discovered, // 아래에서 실제 목록을 조회해 찾아낸 모델
-  ].filter((m, i, a) => m && a.indexOf(m) === i);
+  return [pinned, working, ...STATIC_CHAIN, ...discoveredList].filter(
+    (m, i, a) => m && a.indexOf(m) === i
+  );
 };
 
 /**
- * 후보가 전부 막혔을 때 실제로 쓸 수 있는 모델을 API에 물어본다.
+ * 이 키로 쓸 수 있는 모델 목록을 API에 물어본다.
  *
- * 이게 있어야 다음번에 구글이 또 이름을 바꿔도 코드를 안 고친다.
- * 한 번 찾으면 인스턴스가 살아있는 동안 재사용한다.
+ * 하나만 고르면 안 된다. 제일 높은 버전이 무료 티어에 없으면 거기서
+ * 끝나버리고, 정작 되는 구형까지 못 내려간다 (실제로 그 버그가 있었다).
+ * 그래서 순위를 매긴 목록 전체를 돌려준다.
  */
-let discovered = null;
-
-const discoverFlashModel = async (key) => {
+const discoverModels = async (key) => {
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=200`
     );
-    if (!res.ok) return null;
+    if (!res.ok) return [];
     const { models = [] } = await res.json();
     const usable = models.filter(
       (m) =>
         (m.supportedGenerationMethods || []).includes("generateContent") &&
-        /flash/i.test(m.name) &&
-        !/preview|exp|image|tts|live/i.test(m.name)
+        /flash|pro/i.test(m.name) &&
+        !/preview|exp|image|tts|live|embedding/i.test(m.name)
     );
-    // 버전이 높은 것부터. 예전엔 "이름이 짧은 것"으로 골랐는데 그러면
-    // gemini-1.5-flash 같은 구형이 뽑힌다 (실제로 그렇게 뽑혔다).
     const ver = (name) => {
       const m = name.match(/gemini-(\d+)(?:\.(\d+))?/);
       return m ? Number(m[1]) * 100 + Number(m[2] || 0) : 0;
@@ -108,15 +118,26 @@ const discoverFlashModel = async (key) => {
     usable.sort((a, b) => {
       const d = ver(b.name) - ver(a.name);
       if (d !== 0) return d;
-      // 같은 버전이면 lite가 아닌 쪽을 먼저
       return /lite/i.test(a.name) - /lite/i.test(b.name);
     });
-    const found = usable[0]?.name?.replace(/^models\//, "") || null;
-    if (found) discovered = found;
-    return found;
+    discoveredList = usable
+      .map((m) => m.name.replace(/^models\//, ""))
+      .slice(0, 8);
+    return discoveredList;
   } catch {
-    return null;
+    return [];
   }
+};
+
+/**
+ * 429가 "다 썼다"인지 "이 모델을 쓸 권한이 없다"인지 가른다.
+ *
+ * 무료 티어에 없는 모델을 부르면 사용량이 0이어도 429에 limit: 0이 붙어 온다.
+ * 둘을 같은 문구로 안내하면 사장님은 멀쩡한 한도를 다 썼다고 오해한다.
+ */
+const isQuotaZero = (data) => {
+  const blob = JSON.stringify(data?.error ?? {});
+  return /"?limit"?:\s*"?0"?/i.test(blob) || /limit:\s*0\b/i.test(blob);
 };
 
 const callGemini = async (body) => {
@@ -213,23 +234,40 @@ const callGemini = async (body) => {
     });
   };
 
-  for (const model of modelChain(hasImage(body.messages))) {
+  const attempted = new Set();
+  const run = async (model) => {
+    if (!model || attempted.has(model)) return null;
+    attempted.add(model);
     const r = await attemptModel(model);
-    if (r.ok) return finish(r);
+    if (r.ok) {
+      working = model; // 다음 요청은 여기부터 시작한다
+      return finish(r);
+    }
+    if (working === model) working = null; // 되던 게 안 되면 기억을 지운다
+    return null;
+  };
+
+  for (const model of modelChain(hasImage(body.messages))) {
+    const done = await run(model);
+    if (done) return done;
   }
 
-  // 후보가 전부 막혔다. 쓸 수 있는 모델을 직접 물어보고 한 번 더 시도한다.
-  const fresh = await discoverFlashModel(key);
-  if (fresh && !tried.some((x) => x.startsWith(`${fresh}:`))) {
-    const r = await attemptModel(fresh);
-    if (r.ok) return finish(r);
+  // 후보가 전부 막혔다. 이 키로 뭘 쓸 수 있는지 직접 물어보고
+  // 돌아온 목록을 위에서부터 끝까지 시도한다.
+  for (const model of await discoverModels(key)) {
+    const done = await run(model);
+    if (done) return done;
   }
 
   const status = last?.status ?? 500;
   // 사장님 화면에 영어 에러가 뜨면 고장난 걸로 오해하니 한국어로 바꾼다.
+  // 다만 429는 두 가지 뜻이 섞여 있어서 갈라줘야 한다. 권한이 없어서 나는
+  // 429를 "다 썼다"고 알리면, 멀쩡한 한도를 두고 하루를 기다리게 된다.
   const msg =
     status === 429
-      ? "오늘 AI 사용량이 모두 찼어요. 내일 다시 이용해주세요."
+      ? isQuotaZero(last?.data)
+        ? "지금 이 앱에서 쓸 수 있는 AI 모델이 없어요. 관리자에게 알려주세요."
+        : "오늘 AI 사용량이 모두 찼어요. 내일 다시 이용해주세요."
       : retryableTransient(status)
         ? "AI 서버가 지금 붐벼요. 잠시 뒤에 다시 눌러주세요."
         : "AI 연결에 문제가 있어요. 잠시 뒤에 다시 시도해주세요.";
