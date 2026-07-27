@@ -272,20 +272,40 @@ function OnboardingModal({profile,upP,customers,upC,upQ,upS,upM,upI,upMsg,onClos
 
         {step===3&&(
           <div>
-            <div style={{fontSize:22,fontWeight:900,color:"#111",marginBottom:6}}>이런 기능들이 있어요 🤖</div>
-            <div style={{fontSize:13,color:"#555",lineHeight:1.7,marginBottom:16}}>사장님 시간을 아껴주는 기능들이에요 ⏱️</div>
-            {[
-              {icon:"✨",title:"카카오 대화 자동 추출",desc:"고객 카톡 내용 붙여넣으면 AI가 이름·주소·날짜 자동 추출"},
-              {icon:"📸",title:"사진 분석 견적",desc:"하자 사진 찍으면 AI가 추가 청소 항목과 금액 자동 제안"},
-              {icon:"📱",title:"견적서 카톡 문구 생성",desc:"항목 선택만 하면 보내기 좋은 카카오 문구 자동 완성"},
-              {icon:"🤖",title:"AI 운영 도우미",desc:"매출·미수금·재고 등 뭐든 물어보면 데이터 기반으로 답변"},
-            ].map(f=>(
-              <div key={f.title} style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:14,background:"#F7F7F4",borderRadius:12,padding:"12px 14px"}}>
-                <div style={{fontSize:20,flexShrink:0}}>{f.icon}</div>
-                <div><div style={{fontSize:13,fontWeight:700,color:"#111",marginBottom:2}}>{f.title}</div><div style={{fontSize:11,color:"#888",lineHeight:1.5}}>{f.desc}</div></div>
-              </div>
-            ))}
-            <button onClick={onClose} style={{width:"100%",padding:14,background:"#111",color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginTop:6}}>시작하기 🚀</button>
+            {/* 기능을 나열해봐야 아무도 안 읽는다. 이 앱이 실제로 뭘 해주는지는
+                한 장면으로 보여주는 게 빠르다. 여긴 AI를 부르지 않고 결과만
+                그려둔 시연이라 서버가 붐벼도 항상 똑같이 보인다. */}
+            <div style={{fontSize:22,fontWeight:900,color:"#111",marginBottom:6}}>이렇게 씁니다 ✨</div>
+            <div style={{fontSize:13,color:"#555",lineHeight:1.7,marginBottom:16}}>
+              고객 정보 옮겨 적는 시간이 사라져요.
+            </div>
+
+            <div style={{fontSize:11,color:"#888",fontWeight:700,marginBottom:6}}>1. 카톡 대화를 그대로 붙여넣고</div>
+            <div style={{background:"#F7F7F4",border:"1px solid #EEEEE9",borderRadius:12,padding:"12px 14px",fontSize:11.5,color:"#555",lineHeight:1.75,marginBottom:10}}>
+              고객: 안녕하세요 이사 청소 문의드려요<br/>
+              고객: 강남구 역삼동 30평이고요<br/>
+              고객: 5월 10일 오전 가능할까요? 010-1234-5678이에요
+            </div>
+
+            <div style={{textAlign:"center",fontSize:18,color:"#C4B5FD",marginBottom:10}}>↓</div>
+
+            <div style={{fontSize:11,color:"#888",fontWeight:700,marginBottom:6}}>2. 버튼 한 번이면 끝</div>
+            <div style={{background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:12,padding:"12px 14px",marginBottom:18}}>
+              {[["고객명","김민정"],["연락처","010-1234-5678"],["주소","강남구 역삼동"],["희망날짜","5월 10일 오전"]].map(([k,v])=>(
+                <div key={k} style={{display:"flex",gap:10,fontSize:12,marginBottom:5}}>
+                  <span style={{color:"#8B5CF6",fontWeight:700,width:52,flexShrink:0}}>{k}</span>
+                  <span style={{color:"#111",fontWeight:600}}>{v}</span>
+                </div>
+              ))}
+              <div style={{fontSize:10,color:"#7C3AED",marginTop:6}}>✓ 확인하고 고치면 고객 등록 완료</div>
+            </div>
+
+            <div style={{fontSize:11.5,color:"#888",lineHeight:1.6,marginBottom:16}}>
+              등록해두면 견적·일정·미수금이 알아서 따라붙습니다.<br/>
+              사진으로 추가 견적을 뽑거나, 매출을 물어보는 것도 됩니다.
+            </div>
+
+            <button onClick={onClose} style={{width:"100%",padding:14,background:"#111",color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>시작하기 🚀</button>
             {/* 빈 화면부터 마주하면 대부분 그냥 닫는다. 채워진 화면을 한 번
                 보고 나면 "이런 게 보이는구나"가 남아서 이탈이 줄어든다. */}
             <button onClick={loadSample} style={{width:"100%",padding:12,background:"transparent",color:"#8B5CF6",border:"1.5px solid #DDD6FE",borderRadius:12,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginTop:8}}>
@@ -1160,8 +1180,7 @@ function KakaoExtractor({customers,upC,onDone}){
 </div>
 
 <div style={{background:"#FFFBEB",border:"1px solid #FEF3C7",borderRadius:10,padding:"9px 10px",fontSize:10,color:"#92400E",lineHeight:1.5,marginBottom:8}}>
-  개인정보 안내: 붙여넣은 대화 내용은 고객 정보 추출을 위해 AI 서버로 전송될 수 있어요.<br/>
-  주민번호, 계좌번호, 비밀번호 같은 민감정보는 넣지 마세요.
+  붙여넣은 대화는 정보를 뽑기 위해 AI 서버로 전송돼요. 민감정보는 빼고 넣어주세요.
 </div>
           <textarea value={text} onChange={e=>{setText(e.target.value);setResult(null);setErr("");}} placeholder={"고객: 안녕하세요 이사 청소 문의드려요\n고객: 강남구 역삼동 5월 10일 가능할까요?\n고객: 010-1234-5678이에요"} style={{...IS,height:100,resize:"none",lineHeight:1.6,marginBottom:8,fontSize:12}}/>
           {err&&<div style={{fontSize:11,color:"#EF4444",marginBottom:8}}>{err}</div>}

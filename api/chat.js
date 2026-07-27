@@ -66,9 +66,17 @@ const callGemini = async (body) => {
   // 3.5 flash는 무료 한도가 하루 1,500회라 텍스트·사진을 나눌 이유가 없다.
   // 그래도 둘을 따로 둔 건, 나중에 사진만 상위 모델로 올리고 싶을 때
   // 환경변수만 바꾸면 되게 하려는 것이다.
-  const model = hasImage(body.messages)
+  const primary = hasImage(body.messages)
     ? process.env.GEMINI_VISION_MODEL || "gemini-3.5-flash"
     : process.env.GEMINI_TEXT_MODEL || "gemini-3.5-flash";
+
+  // 무료 티어에서는 인기 모델이 자주 붐빈다("high demand"). 그때 그냥 죽으면
+  // 사장님 입장에선 앱이 고장난 것과 구분이 안 되므로, 같은 모델로 한 번 더
+  // 시도해보고 그래도 안 되면 한 급 아래 모델로 내려간다. 카톡에서 이름·
+  // 전화번호를 뽑는 정도는 아래 모델로도 충분하다.
+  const chain = [primary, "gemini-2.5-flash", "gemini-2.5-flash-lite"].filter(
+    (m, i, a) => a.indexOf(m) === i
+  );
 
   const payload = {
     contents: toGeminiContents(body.messages),
@@ -88,63 +96,78 @@ const callGemini = async (body) => {
   const url = (m) =>
     `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`;
 
-  let res = await fetch(url(model), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // thinkingConfig를 안 받는 모델이면(세대마다 필드 이름이 다르다) 그것만
-  // 빼고 한 번 더 시도한다. 이 필드 하나로 앱 전체가 죽는 걸 막는 장치다.
-  //
-  // 다만 그냥 빼면 모델이 생각하는 데 토큰을 쓰고 정작 본문이 빈 채로
-  // 돌아올 수 있다. 그래서 재시도할 땐 출력 예산을 넉넉히 준다.
-  if (res.status === 400) {
-    const { thinkingConfig, ...restCfg } = payload.generationConfig;
-    res = await fetch(url(model), {
+  const callOnce = async (m, cfg) => {
+    const res = await fetch(url(m), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...payload,
-        generationConfig: {
+      body: JSON.stringify({ ...payload, generationConfig: cfg }),
+    });
+    const raw = await res.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = { raw };
+    }
+    return { res, data };
+  };
+
+  // 503(과부하) · 429(한도) · 500은 잠시 뒤에 되는 경우가 많다.
+  const retryable = (s) => s === 429 || s === 500 || s === 503 || s === 504;
+
+  let last = null;
+
+  for (const model of chain) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let { res, data } = await callOnce(model, payload.generationConfig);
+
+      // thinkingConfig를 안 받는 모델이면(세대마다 필드 이름이 다르다) 그것만
+      // 빼고 다시 부른다. 이 필드 하나로 앱 전체가 죽는 걸 막는 장치다.
+      // 다만 그냥 빼면 생각하는 데 토큰을 쓰고 본문이 빈 채로 올 수 있어서,
+      // 이때는 출력 예산을 넉넉히 준다.
+      if (res.status === 400) {
+        const { thinkingConfig, ...restCfg } = payload.generationConfig;
+        ({ res, data } = await callOnce(model, {
           ...restCfg,
           maxOutputTokens: Math.min((body.max_tokens ?? 1000) * 4, 8000),
-        },
-      }),
-    });
+        }));
+      }
+
+      if (res.ok) {
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        const out = parts
+          .map((p) => p.text || "")
+          .join("")
+          .trim();
+
+        // 프런트가 기대하는 Anthropic 응답 모양으로 되돌린다
+        return json({
+          content: [{ type: "text", text: out }],
+          model,
+          provider: "gemini",
+          finishReason: data?.candidates?.[0]?.finishReason,
+        });
+      }
+
+      last = { status: res.status, data, model };
+      if (!retryable(res.status)) break; // 키 오류 같은 건 다시 해도 똑같다
+      if (attempt === 0) await sleep(900);
+    }
   }
 
-  const text = await res.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = { raw: text };
-  }
+  // 여기까지 왔으면 체인의 모든 모델이 실패했다.
+  // 사장님 화면에 영어 에러가 뜨면 고장난 걸로 오해하니 한국어로 바꾼다.
+  const status = last?.status ?? 500;
+  const msg =
+    status === 429
+      ? "오늘 AI 사용량이 모두 찼어요. 내일 다시 이용해주세요."
+      : retryable(status)
+        ? "AI 서버가 지금 붐벼요. 잠시 뒤에 다시 눌러주세요."
+        : last?.data?.error?.message || "AI 응답에 실패했어요.";
 
-  if (!res.ok) {
-    // 429는 무료 한도 소진이다. 사장님 화면에 영어 에러가 뜨면 고장난 걸로
-    // 오해하니 한국어로 바꿔서 내려준다.
-    const msg =
-      res.status === 429
-        ? "오늘 AI 사용량이 모두 찼어요. 내일 다시 이용해주세요."
-        : data?.error?.message || "AI 응답에 실패했어요.";
-    return json({ error: msg, status: res.status, detail: data }, res.status);
-  }
-
-  const parts = data?.candidates?.[0]?.content?.parts || [];
-  const out = parts
-    .map((p) => p.text || "")
-    .join("")
-    .trim();
-
-  // 프런트가 기대하는 Anthropic 응답 모양으로 되돌린다
-  return json({
-    content: [{ type: "text", text: out }],
-    model,
-    provider: "gemini",
-    finishReason: data?.candidates?.[0]?.finishReason,
-  });
+  return json({ error: msg, status, triedModels: chain, detail: last?.data }, status);
 };
 
 const callAnthropic = async (body) => {
