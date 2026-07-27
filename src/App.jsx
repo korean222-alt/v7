@@ -77,6 +77,31 @@ let aiCardsCache = { fp:"", cards:null };
 const SEED_CUSTOMERS = [];
 const SEED_QUOTES = [];
 const SEED_SCHEDULES = [];
+
+/**
+ * 둘러보기용 예시 데이터.
+ *
+ * 처음 열었을 때 매출 0원 · 고객 0명 · 할 일 없음만 보이면 "아 내가 이걸 다
+ * 입력해야 되는구나" 싶어서 그대로 닫는다. 소상공인 도구가 죽는 제일 흔한
+ * 지점이 여기다. 그래서 한 번 채워진 화면을 보여주고, 마음에 들면 비우고
+ * 시작하게 한다. 날짜는 열 때마다 오늘 기준으로 다시 계산한다.
+ */
+const makeSampleData = () => ({
+  customers: [
+    {id:"sample-c1",name:"김민정",phone:"010-1234-5678",address:"강남구 역삼동 101호",notes:"강아지 있음",createdAt:addDaysKST(-40)},
+    {id:"sample-c2",name:"박재현",phone:"010-9876-5432",address:"마포구 상암동 205호",notes:"",createdAt:addDaysKST(-18)},
+    {id:"sample-c3",name:"이수연",phone:"010-5555-1234",address:"송파구 잠실동 308호",notes:"오전 선호",createdAt:addDaysKST(-5)},
+  ],
+  quotes: [
+    {id:"sample-q1",customerId:"sample-c1",customerName:"김민정",items:[{id:"si1",label:"기본 청소 (30평)",price:220000},{id:"si2",label:"냉장고 내부 청소",price:30000}],total:250000,status:"계약완료",payStatus:"입금완료",date:addDaysKST(-30),createdAt:addDaysKST(-32)},
+    {id:"sample-q2",customerId:"sample-c2",customerName:"박재현",items:[{id:"si3",label:"기본 청소 (20평)",price:160000},{id:"si4",label:"에어컨 필터 청소",price:20000}],total:180000,status:"계약완료",payStatus:"미수금",date:addDaysKST(-12),createdAt:addDaysKST(-14)},
+    {id:"sample-q3",customerId:"sample-c3",customerName:"이수연",items:[{id:"si5",label:"기본 청소 (20평)",price:160000},{id:"si6",label:"욕실 곰팡이 제거",price:25000}],total:185000,status:"검토중",payStatus:"미청구",date:addDaysKST(4),createdAt:addDaysKST(-16)},
+  ],
+  schedules: [
+    {id:"sample-s1",customerId:"sample-c3",customerName:"이수연",date:addDaysKST(2),time:"10:00",address:"송파구 잠실동 308호",status:"예정",notes:"주차 가능"},
+    {id:"sample-s2",customerId:"sample-c1",customerName:"김민정",date:addDaysKST(6),time:"13:00",address:"강남구 역삼동 101호",status:"예정",notes:""},
+  ],
+});
 const DEFAULT_MATERIALS = [
   {id:"m1",label:"기본 청소 (10평)",price:100000,category:"기본"},
   {id:"m2",label:"기본 청소 (20평)",price:160000,category:"기본"},
@@ -157,7 +182,7 @@ const PRIORITY_STYLE = {
 };
 
 // ── APP ───────────────────────────────────────────────────────────────────────
-function OnboardingModal({profile,upP,customers,upC,upM,upI,upMsg,onClose}){
+function OnboardingModal({profile,upP,customers,upC,upQ,upS,upM,upI,upMsg,onClose}){
   const [step,setStep]=useState(1);
   const [bizName,setBizName]=useState(profile.bizName||"");
   const [phone,setPhone]=useState(profile.phone||"");
@@ -178,6 +203,12 @@ function OnboardingModal({profile,upP,customers,upC,upM,upI,upMsg,onClose}){
     upI(industry==="인테리어" ? INTERIOR_INVENTORY : DEFAULT_INVENTORY);
     upMsg(getDefaultMessages(industry));
     setStep(2);
+  };
+
+  const loadSample=()=>{
+    const s=makeSampleData();
+    upC(s.customers); upQ(s.quotes); upS(s.schedules);
+    onClose();
   };
 
   const saveCustomer=()=>{
@@ -255,6 +286,14 @@ function OnboardingModal({profile,upP,customers,upC,upM,upI,upMsg,onClose}){
               </div>
             ))}
             <button onClick={onClose} style={{width:"100%",padding:14,background:"#111",color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginTop:6}}>시작하기 🚀</button>
+            {/* 빈 화면부터 마주하면 대부분 그냥 닫는다. 채워진 화면을 한 번
+                보고 나면 "이런 게 보이는구나"가 남아서 이탈이 줄어든다. */}
+            <button onClick={loadSample} style={{width:"100%",padding:12,background:"transparent",color:"#8B5CF6",border:"1.5px solid #DDD6FE",borderRadius:12,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginTop:8}}>
+              👀 예시 데이터로 먼저 둘러보기
+            </button>
+            <div style={{fontSize:10,color:"#AAA",textAlign:"center",marginTop:6,lineHeight:1.5}}>
+              예시는 [더보기 → 데이터 백업]에서 언제든 지울 수 있어요
+            </div>
           </div>
         )}
 
@@ -327,17 +366,19 @@ export default function App() {
             upP={upP}
             customers={customers}
             upC={upC}
+            upQ={upQ}
+            upS={upS}
             upM={upM}
             upI={upI}
             upMsg={upMsg}
             onClose={()=>{store.set("w4-onboarding-done",true);setShowOnboarding(false);}}
           />
         )}
-        {tab==="home"     && <HomeTab     customers={customers} quotes={quotes} schedules={schedules} profile={profile} workers={workers} inventory={inventory} messages={messages} setTab={setTab}/>}
+        {tab==="home"     && <HomeTab     customers={customers} quotes={quotes} schedules={schedules} profile={profile} workers={workers} inventory={inventory} messages={messages} setTab={setTab} upC={upC} upQ={upQ} upS={upS}/>}
         {tab==="clients"  && <ClientsTab  customers={customers} quotes={quotes} schedules={schedules} materials={materials} profile={profile} messages={messages} upC={upC} upQ={upQ} upS={upS}/>}
         {tab==="schedule" && <ScheduleTab schedules={schedules} quotes={quotes} upS={upS}/>}
         {tab==="stats"    && <StatsTab    quotes={quotes} customers={customers}/>}
-        {tab==="more"     && <MoreTab     materials={materials} profile={profile} quotes={quotes} customers={customers} schedules={schedules} workers={workers} inventory={inventory} messages={messages} costs={costs} upM={upM} upP={upP} upW={upW} upI={upI} upMsg={upMsg} upCosts={upCosts}/>}
+        {tab==="more"     && <MoreTab     materials={materials} profile={profile} quotes={quotes} customers={customers} schedules={schedules} workers={workers} inventory={inventory} messages={messages} costs={costs} upC={upC} upQ={upQ} upS={upS} upM={upM} upP={upP} upW={upW} upI={upI} upMsg={upMsg} upCosts={upCosts}/>}
       </div>
       <nav style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"#fff",borderTop:"1px solid #EEEEE9",display:"flex",zIndex:999}}>
         {TABS.map(t=>(
@@ -549,7 +590,7 @@ navigate 규칙:
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
-function HomeTab({customers,quotes,schedules,profile,workers,inventory,messages,setTab}){
+function HomeTab({customers,quotes,schedules,profile,workers,inventory,messages,setTab,upC,upQ,upS}){
   const completed=quotes.filter(q=>q.status==="계약완료");
   const totalRev=completed.reduce((s,q)=>s+q.total,0);
   const unpaid=quotes.filter(q=>q.payStatus==="미수금");
@@ -560,6 +601,10 @@ function HomeTab({customers,quotes,schedules,profile,workers,inventory,messages,
   const month=new Date().getMonth()+1;
   const isMovingSeason=[2,3,4,9,10].includes(month);
   const isInterior=profile.industry==="인테리어";
+  // 처음 열면 모든 숫자가 0이라 "내가 다 입력해야 하는구나" 하고 닫는다.
+  // 온보딩 3단계에도 예시 버튼이 있지만 건너뛰면 못 보므로 여기서 한 번 더 잡는다.
+  const isEmpty=customers.length===0&&quotes.length===0&&schedules.length===0;
+  const loadSample=()=>{const s=makeSampleData();upC?.(s.customers);upQ?.(s.quotes);upS?.(s.schedules);};
   const nextSeason=isInterior
     ?(month<=4?"봄 리모델링 시즌 (3~4월)":month<=9?"가을 리모델링 시즌 (9~10월)":"봄 리모델링 시즌 (3~4월)")
     :(month<=4?"봄 이사철 (3~4월)":month<=9?"가을 이사철 (9~10월)":"봄 이사철 (3~4월)");
@@ -580,6 +625,21 @@ function HomeTab({customers,quotes,schedules,profile,workers,inventory,messages,
         )}
       </div>
       <div style={{padding:"16px 16px 0"}}>
+        {isEmpty&&(
+          <div style={{background:"#fff",borderRadius:16,padding:"20px 18px",marginBottom:12,border:"1.5px solid #DDD6FE"}}>
+            <div style={{fontSize:15,fontWeight:900,color:"#111",marginBottom:6}}>아직 비어 있어요 👋</div>
+            <div style={{fontSize:12.5,color:"#666",lineHeight:1.7,marginBottom:14}}>
+              고객을 넣기 전에, 채워지면 어떤 화면인지 먼저 보시는 게 빠릅니다.<br/>
+              예시는 나중에 한 번에 지울 수 있어요.
+            </div>
+            <button onClick={loadSample} style={{width:"100%",padding:13,background:"#8B5CF6",color:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:8}}>
+              👀 예시로 둘러보기
+            </button>
+            <button onClick={()=>setTab("clients")} style={{width:"100%",padding:12,background:"transparent",color:"#888",border:"1.5px solid #EEEEE9",borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+              바로 내 고객 등록하기
+            </button>
+          </div>
+        )}
         <ActionCards customers={customers} quotes={quotes} schedules={schedules} workers={workers} inventory={inventory} setTab={setTab}/>
         <div style={{background:isMovingSeason?"#111":"#fff",borderRadius:14,padding:"16px",marginBottom:12,border:isMovingSeason?"none":"1px solid #EEEEE9"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -1067,6 +1127,9 @@ function KakaoExtractor({customers,upC,onDone}){
         body:JSON.stringify({model:HAIKU,max_tokens:400,messages:[{role:"user",content:`카카오톡 대화에서 고객 정보를 추출해줘. 반드시 JSON 객체만 응답해. 마크다운 없음.\n{"name":"","phone":"","address":"","date":"YYYY-MM-DD 또는 빈문자열","notes":""}\n\n대화:\n${text.slice(0,1500)}`}]})
       });
       const data=await res.json();
+      // 서버가 한도 초과 같은 사정을 한국어로 내려준다. 이걸 안 보여주면
+      // 사장님은 "추출 실패"만 보고 자기 입력이 잘못된 줄 안다.
+      if(!res.ok||data.error){setErr(data.error||"AI 응답에 실패했어요.");setLoading(false);return;}
       const raw=data.content?.[0]?.text||"{}";
       const match=raw.match(/\{[\s\S]*\}/);
       const parsed=JSON.parse(match?match[0]:raw);
@@ -1153,6 +1216,7 @@ function NewQuoteFlow({customer,materials,quotes,schedules,profile,upQ,upS,onDon
       // Vercel 서버리스 필요
       const resp=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:HAIKU,max_tokens:600,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:base64}},{type:"text",text:`이사청소 전문가로서 이 사진에서 추가 청소 비용 항목을 찾아주세요.\nJSON만 답하세요:\n{"severity":"경미|보통|심각","summary":"한줄요약","items":[{"label":"항목명","price":숫자,"reason":"이유"}]}\n항목없으면 items:[]. price는 10000~80000.`}]}]})});
       const data=await resp.json();
+      if(!resp.ok||data.error){setVisionData({severity:"분석실패",summary:data.error||"다시 시도해주세요",items:[]});setVisionLoading(false);return;}
       const raw=(data.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim();
       const match=raw.match(/\{[\s\S]*\}/);
       setVisionData(JSON.parse(match?match[0]:raw));
@@ -1542,7 +1606,7 @@ function StatsTab({quotes,customers}){
 }
 
 // ── MORE TAB ──────────────────────────────────────────────────────────────────
-function MoreTab({materials,profile,quotes,customers,schedules,workers,inventory,messages,costs,upM,upP,upW,upI,upMsg,upCosts}){
+function MoreTab({materials,profile,quotes,customers,schedules,workers,inventory,messages,costs,upC,upQ,upS,upM,upP,upW,upI,upMsg,upCosts}){
   const [section,setSection]=useState("main");
   if(section==="materials") return <MaterialsSection materials={materials} upM={upM} onBack={()=>setSection("main")}/>;
   if(section==="profile")   return <ProfileSection   profile={profile}    upP={upP} onBack={()=>setSection("main")}/>;
@@ -1551,6 +1615,7 @@ function MoreTab({materials,profile,quotes,customers,schedules,workers,inventory
   if(section==="messages")  return <MessagesSection  messages={messages}  upMsg={upMsg} onBack={()=>setSection("main")}/>;
   if(section==="costs") return <CostsSection costs={costs} upCosts={upCosts} quotes={quotes} onBack={()=>setSection("main")}/>;
   if(section==="chat")      return <ChatSection      quotes={quotes} customers={customers} schedules={schedules} profile={profile} workers={workers} inventory={inventory} onBack={()=>setSection("main")}/>;
+  if(section==="backup")    return <BackupSection    data={{customers,quotes,schedules,materials,profile,workers,inventory,messages,costs}} ups={{upC,upQ,upS,upM,upP,upW,upI,upMsg,upCosts}} onBack={()=>setSection("main")}/>;
   const menus=[
     {id:"costs",     icon:"💰",label:"원가 관리",       sub:"인건비·재료비·순이익 분석",  color:"#10B981"},
     {id:"chat",      icon:"🤖",label:"AI 운영 도우미",  sub:"매출·견적 분석 챗봇",       color:"#8B5CF6"},
@@ -1559,6 +1624,7 @@ function MoreTab({materials,profile,quotes,customers,schedules,workers,inventory
     {id:"messages",  icon:"✏️",label:"문구 관리",        sub:"카카오 문구 커스터마이징", color:"#EC4899"},
     {id:"materials", icon:"📋",label:"단가표 관리",      sub:"기본·추가 항목 단가 설정",  color:"#3B82F6"},
     {id:"profile",   icon:"🏪",label:"업체 프로필",      sub:"상호명, 연락처 설정",       color:"#10B981"},
+    {id:"backup",    icon:"💾",label:"데이터 백업",        sub:"내보내기 · 불러오기 · 초기화", color:"#6366F1"},
   ];
   return(
     <div>
@@ -1574,6 +1640,103 @@ function MoreTab({materials,profile,quotes,customers,schedules,workers,inventory
         <div style={{marginTop:20,padding:"14px",background:"#F7F7F4",borderRadius:14,border:"1px solid #EEEEE9",textAlign:"center"}}>
           <div style={S.sub}>WORKOS · 사장님의 시간을 아껴드립니다</div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── BACKUP SECTION ────────────────────────────────────────────────────────────
+/**
+ * 데이터 내보내기 / 불러오기 / 초기화.
+ *
+ * 이 앱은 브라우저(localStorage)에만 저장한다. 폰을 바꾸거나 캐시를 지우면
+ * 고객 정보가 통째로 사라진다는 뜻이다. 고객관리 프로그램이 데이터를 날리면
+ * 그건 불편이 아니라 사고라서, 내보내기는 있어야 할 기능이 아니라 없으면
+ * 남에게 주면 안 되는 기능이다.
+ */
+function BackupSection({data,ups,onBack}){
+  const [msg,setMsg]=useState("");
+  const fileRef=useRef(null);
+
+  const counts=[
+    ["고객",data.customers.length],
+    ["견적",data.quotes.length],
+    ["일정",data.schedules.length],
+  ];
+
+  const exportJson=()=>{
+    const payload={_app:"workos",_version:1,_exportedAt:new Date().toISOString(),...data};
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=`workos-백업-${today()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setMsg("백업 파일을 저장했어요. 카톡 '나에게 보내기'로 보관해두세요.");
+  };
+
+  const importJson=async(file)=>{
+    try{
+      const parsed=JSON.parse(await file.text());
+      if(parsed._app!=="workos") throw new Error("형식이 다릅니다");
+      // 없는 항목은 건드리지 않는다. 예전 백업에 새 항목이 없을 수 있어서.
+      const map=[["customers",ups.upC],["quotes",ups.upQ],["schedules",ups.upS],["materials",ups.upM],
+                 ["profile",ups.upP],["workers",ups.upW],["inventory",ups.upI],["messages",ups.upMsg],["costs",ups.upCosts]];
+      for(const [key,up] of map) if(parsed[key]!==undefined) up(parsed[key]);
+      setMsg("복원했어요. 화면을 확인해보세요.");
+    }catch{
+      setMsg("이 파일은 읽을 수 없어요. WORKOS에서 내보낸 파일이 맞나요?");
+    }
+  };
+
+  const loadSample=()=>{
+    const s=makeSampleData();
+    ups.upC(s.customers); ups.upQ(s.quotes); ups.upS(s.schedules);
+    setMsg("예시 데이터를 넣었어요.");
+  };
+
+  const clearAll=()=>{
+    if(!confirm("고객·견적·일정을 모두 지웁니다.\n지우기 전에 내보내기부터 하시는 걸 권합니다.\n계속할까요?")) return;
+    ups.upC([]); ups.upQ([]); ups.upS([]);
+    setMsg("비웠어요. 이제 실제 데이터를 넣으시면 됩니다.");
+  };
+
+  return(
+    <div>
+      <PH title="데이터 백업" sub="이 기기에만 저장돼요" onBack={onBack}/>
+      <div style={{padding:"16px"}}>
+
+        <div style={{...S.alertYellow,marginBottom:14}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#92400E",marginBottom:4}}>⚠ 꼭 읽어주세요</div>
+          <div style={{fontSize:12,color:"#92400E",lineHeight:1.6}}>
+            자료가 이 브라우저 안에만 저장됩니다. 폰을 바꾸거나 인터넷 기록을 지우면
+            고객 정보가 사라져요. <b>일주일에 한 번은 내보내기</b>를 해두세요.
+          </div>
+        </div>
+
+        <Card style={{marginBottom:14}}>
+          <SL>지금 저장된 자료</SL>
+          <div style={{display:"flex",gap:8}}>
+            {counts.map(([label,n])=>(
+              <div key={label} style={{flex:1,textAlign:"center",background:"#F7F7F4",borderRadius:12,padding:"12px 0"}}>
+                <div style={{fontSize:20,fontWeight:900,color:"#111"}}>{n}</div>
+                <div style={S.sub}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <BigBtn onClick={exportJson}>💾 백업 파일 내보내기</BigBtn>
+        <OutBtn onClick={()=>fileRef.current?.click()}>📂 백업 파일 불러오기</OutBtn>
+        <input ref={fileRef} type="file" accept="application/json,.json" style={{display:"none"}}
+               onChange={e=>{const f=e.target.files?.[0]; if(f) importJson(f); e.target.value="";}}/>
+
+        <div style={{height:8}}/>
+        <OutBtn onClick={loadSample}>👀 예시 데이터 넣어보기</OutBtn>
+        <OutBtn onClick={clearAll} style={{color:"#DC2626",borderColor:"#FECACA"}}>🗑 고객·견적·일정 비우기</OutBtn>
+
+        {msg&&<div style={{...S.alertBlue,marginTop:6}}><div style={{fontSize:12,color:"#1D4ED8",lineHeight:1.6}}>{msg}</div></div>}
       </div>
     </div>
   );
@@ -1854,7 +2017,7 @@ setMsgs(p => [
   ...p,
   {
     role: "assistant",
-    text: data.content?.[0]?.text || "잠시 후 다시 시도해주세요.",
+    text: data.error || data.content?.[0]?.text || "잠시 후 다시 시도해주세요.",
   },
 ]);
     } catch (e) {
