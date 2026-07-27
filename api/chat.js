@@ -159,33 +159,42 @@ const callGemini = async (body) => {
     return { res, data };
   };
 
-  // 503(붐빔) · 429(한도) · 5xx는 잠시 뒤에 되는 경우가 많다
-  const retryable = (s) => s === 429 || s === 500 || s === 503 || s === 504;
+  // 503·500·504는 서버 쪽 순간 장애라 잠깐 뒤엔 될 수 있다.
+  // 429(한도 초과)는 0.9초 기다린다고 절대 안 풀린다 — 같은 모델을 다시
+  // 두드리는 건 남은 분당 한도만 갉아먹는 헛수고다. 그래서 429는 로컬
+  // 재시도 없이 바로 다음 모델로 넘긴다. 후보 4개를 전부 2번씩 두드리면
+  // 사용자 액션 한 번에 요청 8개가 나가는데, 그게 오히려 분당 15회 한도를
+  // 스스로 태우는 원인이었다. 이 수정으로 최악의 경우도 4~5개로 줄어든다.
+  const retryableTransient = (s) => s === 500 || s === 503 || s === 504;
+  const retryableChain = (s) => s === 429 || retryableTransient(s);
 
   const tried = [];
   let last = null;
 
   const attemptModel = async (model) => {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      let { res, data } = await callOnce(model, payload.generationConfig);
+    let { res, data } = await callOnce(model, payload.generationConfig);
 
-      // thinkingConfig는 세대마다 이름이 달라서 거부당할 수 있다. 그것만 빼고
-      // 다시 부르되, 생각에 토큰을 쓰고 본문이 비지 않도록 예산을 늘려준다.
-      if (res.status === 400) {
-        const { thinkingConfig, ...restCfg } = payload.generationConfig;
-        ({ res, data } = await callOnce(model, {
-          ...restCfg,
-          maxOutputTokens: Math.min((body.max_tokens ?? 1000) * 4, 8000),
-        }));
-      }
-
-      if (res.ok) return { ok: true, data, model };
-
-      last = { status: res.status, data, model };
-      tried.push(`${model}:${res.status}`);
-      if (!retryable(res.status)) return { ok: false }; // 다시 해도 같은 실패
-      if (attempt === 0) await sleep(900);
+    // thinkingConfig는 세대마다 이름이 달라서 거부당할 수 있다. 그것만 빼고
+    // 다시 부르되, 생각에 토큰을 쓰고 본문이 비지 않도록 예산을 늘려준다.
+    if (res.status === 400) {
+      const { thinkingConfig, ...restCfg } = payload.generationConfig;
+      ({ res, data } = await callOnce(model, {
+        ...restCfg,
+        maxOutputTokens: Math.min((body.max_tokens ?? 1000) * 4, 8000),
+      }));
     }
+
+    if (res.ok) return { ok: true, data, model };
+
+    // 순간 장애일 때만 같은 모델로 한 번 더 (429는 여기 안 옴)
+    if (retryableTransient(res.status)) {
+      await sleep(900);
+      ({ res, data } = await callOnce(model, payload.generationConfig));
+      if (res.ok) return { ok: true, data, model };
+    }
+
+    last = { status: res.status, data, model };
+    tried.push(`${model}:${res.status}`);
     return { ok: false };
   };
 
@@ -221,7 +230,7 @@ const callGemini = async (body) => {
   const msg =
     status === 429
       ? "오늘 AI 사용량이 모두 찼어요. 내일 다시 이용해주세요."
-      : retryable(status)
+      : retryableTransient(status)
         ? "AI 서버가 지금 붐벼요. 잠시 뒤에 다시 눌러주세요."
         : "AI 연결에 문제가 있어요. 잠시 뒤에 다시 시도해주세요.";
 

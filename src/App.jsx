@@ -54,7 +54,7 @@ const S = {
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
 const HAIKU        = "claude-haiku-4-5-20251001";
-const USAGE_LIMITS = { vision:4, chat:20, kakao:10 };
+const USAGE_LIMITS = { vision:8, chat:40, kakao:20 };
 
 const tryUseQuota = async (type) => {
   const d = today();
