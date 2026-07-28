@@ -150,9 +150,15 @@ const isQuotaZero = (data) => {
  *
  * 그래서 끝까지 가는 것보다 제때 포기하는 게 낫다. 안 되면 다음 탭에서
  * 다시 누르면 되고, 그때는 기억해둔 모델부터 시작하니 훨씬 빠르다.
+ *
+ * 다만 이 숫자가 정적 후보보다 작으면 안 된다. 4로 두었더니 후보 5개 중
+ * 마지막 gemini-1.5-flash까지 못 갔다 — 무료 키의 마지막 보루로 일부러
+ * 맨 뒤에 둔 그 모델이 정작 한 번도 안 불렸고, attempted가 이미 한도라
+ * 목록 조회로 내려가는 길도 같이 막혔다. 안 되는 모델은 404·429로 즉시
+ * 돌아오니 몇 개 더 두드리는 비용은 작다. 진짜 방어선은 시간 예산이다.
  */
 const DEADLINE_MS = Number(process.env.AI_DEADLINE_MS || 12000);
-const MAX_MODELS = Number(process.env.AI_MAX_MODELS || 4);
+const MAX_MODELS = Number(process.env.AI_MAX_MODELS || STATIC_CHAIN.length + 1);
 
 const callGemini = async (body) => {
   const startedAt = Date.now();
@@ -283,14 +289,25 @@ const callGemini = async (body) => {
   // 사장님 화면에 영어 에러가 뜨면 고장난 걸로 오해하니 한국어로 바꾼다.
   // 다만 429는 두 가지 뜻이 섞여 있어서 갈라줘야 한다. 권한이 없어서 나는
   // 429를 "다 썼다"고 알리면, 멀쩡한 한도를 두고 하루를 기다리게 된다.
+  //
+  // 400·401·403도 마찬가지로 갈라야 한다. 키가 틀렸거나 API가 꺼져 있으면
+  // 다시 눌러도 영원히 안 된다. 그걸 "잠시 뒤에 다시 시도해주세요"라고
+  // 안내하면 사장님은 하루 종일 같은 버튼을 누르고, 우리는 고장난 걸
+  // 모른 채 지나간다. 기다려서 될 일과 사람이 손대야 할 일은 구분한다.
+  // 코드를 붙이는 건 사장님 보라는 게 아니라, 전화로 불러줄 수 있으라고.
+  const keyProblem = status === 400 || status === 401 || status === 403;
   const msg =
     status === 429
       ? isQuotaZero(last?.data)
         ? "지금 이 앱에서 쓸 수 있는 AI 모델이 없어요. 관리자에게 알려주세요."
         : "오늘 AI 사용량이 모두 찼어요. 내일 다시 이용해주세요."
-      : retryableTransient(status)
-        ? "AI 서버가 지금 붐벼요. 잠시 뒤에 다시 눌러주세요."
-        : "AI 연결에 문제가 있어요. 잠시 뒤에 다시 시도해주세요.";
+      : keyProblem
+        ? `AI 열쇠(키) 설정에 문제가 있어요. 다시 눌러도 안 되니 관리자에게 알려주세요. (코드 ${status})`
+        : status === 404
+          ? "쓸 수 있는 AI 모델을 찾지 못했어요. 관리자에게 알려주세요. (코드 404)"
+          : retryableTransient(status)
+            ? "AI 서버가 지금 붐벼요. 잠시 뒤에 다시 눌러주세요."
+            : `AI 연결에 문제가 있어요. 잠시 뒤에 다시 시도해주세요. (코드 ${status})`;
 
   const ranOut = timeLeft() < 3000;
   return json(
@@ -345,12 +362,94 @@ const callAnthropic = async (body) => {
   return json(data);
 };
 
+/**
+ * GET /api/chat — 점검용.
+ *
+ * AI가 안 될 때 원인이 셋 중 뭔지(키가 없다 / 키가 틀렸다 / 모델이 없다)
+ * 로그를 못 봐도 알 수 있어야 한다. 무료 플랜은 런타임 로그가 한 시간만
+ * 남아서, 사장님이 안 된다고 연락할 때쯤이면 이미 지워져 있다.
+ *
+ * 이 주소는 모델 목록만 물어보므로 생성 한도를 쓰지 않는다.
+ * 키 자체는 절대 돌려주지 않는다 — 설정됐는지 여부만 알려준다.
+ */
+const diagnose = async () => {
+  const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+
+  if (provider === "anthropic") {
+    return json({
+      provider,
+      keySet: Boolean(process.env.ANTHROPIC_API_KEY),
+      hint: process.env.ANTHROPIC_API_KEY
+        ? "설정 완료."
+        : "ANTHROPIC_API_KEY가 없습니다.",
+    });
+  }
+
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) {
+    return json({
+      provider,
+      keySet: false,
+      ok: false,
+      hint: "GEMINI_API_KEY가 설정되지 않았습니다. Vercel → Settings → Environment Variables에 넣고 다시 배포하세요.",
+    });
+  }
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=200`
+  );
+  const raw = await res.text();
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    data = { raw: raw.slice(0, 300) };
+  }
+
+  if (!res.ok) {
+    return json({
+      provider,
+      keySet: true,
+      ok: false,
+      status: res.status,
+      hint:
+        res.status === 400
+          ? "키가 잘못됐거나 만료됐습니다. Google AI Studio에서 새로 발급하세요."
+          : res.status === 403
+            ? "키에 IP·리퍼러 제한이 걸렸거나 Generative Language API가 꺼져 있습니다."
+            : "모델 목록을 가져오지 못했습니다.",
+      detail: data?.error?.message,
+    });
+  }
+
+  const usable = (data.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
+    .map((m) => m.name.replace(/^models\//, ""));
+
+  return json({
+    provider,
+    keySet: true,
+    ok: true,
+    // 앱이 실제로 두드릴 순서. 이 중 하나도 usable에 없으면 전부 404가 난다.
+    chain: modelChain(false),
+    pinned: process.env.GEMINI_TEXT_MODEL || null,
+    usableCount: usable.length,
+    usable: usable.slice(0, 30),
+    hint:
+      "chain의 모델이 usable에 하나도 없으면 GEMINI_TEXT_MODEL에 usable 중 하나를 넣으세요.",
+  });
+};
+
 export default async function handler(req) {
-  if (req.method !== "POST") {
+  if (req.method !== "POST" && req.method !== "GET") {
     return json({ error: "Method Not Allowed" }, 405);
   }
 
   try {
+    // 점검용 GET도 같은 try 안에 둔다. 밖에 두면 여기서 난 예외가
+    // JSON이 아닌 Vercel 오류 페이지로 나가서, 정작 원인을 못 본다.
+    if (req.method === "GET") return await diagnose();
+
     const body = await req.json();
     const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
     return provider === "anthropic"
